@@ -1,15 +1,15 @@
 
-Import-Module .\Output\Elizium.Shelly\Elizium.Shelly.psm1
+Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1
 Describe 'PoShShell' {
   BeforeEach {
-    InModuleScope Elizium.Shelly {
+    InModuleScope Elizium.Klassy {
       [string]$script:_path = "$TestDrive\undo-script.ps1";
       [PoShShell]$script:_shell = [PoShShell]::new($_path);
     }
   }
 
   AfterEach {
-    InModuleScope Elizium.Shelly {
+    InModuleScope Elizium.Klassy {
       if (Test-Path -LiteralPath $_path) {
         Remove-Item -LiteralPath $_path;
       }
@@ -18,7 +18,7 @@ Describe 'PoShShell' {
 
   Context 'given: multiple operations' {
     It 'should: build rename operation content' {
-      InModuleScope Elizium.Shelly {
+      InModuleScope Elizium.Klassy {
         $_shell.rename("$TestDrive\one.txt", 'one-new.txt');
         $_shell.rename("$TestDrive\two.txt", 'two-new.txt');
         $_shell.rename("$TestDrive\three.txt", 'three-new.txt');

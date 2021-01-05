@@ -1,8 +1,8 @@
-Import-Module .\Output\Elizium.Shelly\Elizium.Shelly.psm1
+Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1
 
 Describe 'UndoRename' {
   BeforeEach {
-    InModuleScope Elizium.Shelly {
+    InModuleScope Elizium.Klassy {
       [string]$script:_path = "$TestDrive\undo-script.ps1";
       [PoShShell]$script:_shell = [PoShShell]::new($_path);
       [Undo]$script:_undoRename = [UndoRename]::new($_shell);
@@ -10,7 +10,7 @@ Describe 'UndoRename' {
   }
 
   AfterEach {
-    InModuleScope Elizium.Shelly {
+    InModuleScope Elizium.Klassy {
       if (Test-Path -LiteralPath $_path) {
         Remove-Item -LiteralPath $_path;
       }
@@ -19,7 +19,7 @@ Describe 'UndoRename' {
 
   Context 'given: PoShShell' {
     It 'should: generate undo rename operations' {
-      InModuleScope Elizium.Shelly {
+      InModuleScope Elizium.Klassy {
         [PSCustomObject[]]$operations = @(
           [PSCustomObject]@{
             From = "$TestDrive\one-old.txt";
