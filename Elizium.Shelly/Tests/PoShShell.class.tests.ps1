@@ -3,7 +3,7 @@ Import-Module .\Output\Elizium.Shelly\Elizium.Shelly.psm1
 Describe 'PoShShell' {
   BeforeEach {
     InModuleScope Elizium.Shelly {
-      [string]$script:_path = 'TestDrive:\undo-script.ps1';
+      [string]$script:_path = "$TestDrive\undo-script.ps1";
       [PoShShell]$script:_shell = [PoShShell]::new($_path);
     }
   }
