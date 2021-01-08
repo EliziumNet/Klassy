@@ -22,17 +22,20 @@ Describe 'UndoRename' {
       InModuleScope Elizium.Klassy {
         [PSCustomObject[]]$operations = @(
           [PSCustomObject]@{
-            From = "$TestDrive\one-old.txt";
+            Directory = "$TestDrive";
+            From = "one-old.txt";
             To   = 'one-new.txt';
           },
 
           [PSCustomObject]@{
-            From = "$TestDrive\two-old.txt";
+            Directory = "$TestDrive";
+            From = "two-old.txt";
             To   = 'two-new.txt';
           },
 
           [PSCustomObject]@{
-            From = "$TestDrive\three-old.txt";
+            Directory = "$TestDrive";
+            From = "three-old.txt";
             To   = 'three-new.txt';
           }
         )
