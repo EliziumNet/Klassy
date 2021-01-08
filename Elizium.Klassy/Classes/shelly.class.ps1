@@ -23,7 +23,8 @@ class PoShShell : Shell {
   }
 
   [void] rename ([string]$from, [string]$to) {
-    [void]$this._builder.AppendLine($("Rename-Item -LiteralPath $from -NewName $to"));
+    [string]$toFilename = [System.IO.Path]::GetFileName($to)
+    [void]$this._builder.AppendLine($("Rename-Item -LiteralPath '$from' -NewName '$toFilename'"));
   }
 
   [void] persist([string]$content) {
@@ -44,7 +45,7 @@ class Undo : Operant {
   }
 
   [void] alert([PSCustomObject]$operation) {
-    # User should pass in a PSCustomObject with From and To fields
+    # User should pass in a PSCustomObject with Directory, From and To fields
     #
     [void]$this.Operations.Add($operation);
   }
@@ -55,7 +56,7 @@ class Undo : Operant {
   }
 }
 
-class UndoRename : undo {
+class UndoRename : Undo {
   UndoRename([Shell]$shell) : base($shell) {
 
   }
@@ -64,7 +65,8 @@ class UndoRename : undo {
     $($this.Operations.count - 1)..0 | ForEach-Object {
       [PSCustomObject]$operation = $this.Operations[$_];
 
-      $this.Shell.rename($operation.To, $operation.From);
+      [string]$toPath = Join-Path -Path $operation.Directory -ChildPath $operation.To;
+      $this.Shell.rename($toPath, $operation.From);
     }
 
     return $this.Shell._builder.ToString();
