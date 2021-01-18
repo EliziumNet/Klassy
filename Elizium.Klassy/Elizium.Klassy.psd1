@@ -98,10 +98,10 @@
       Tags = @('shell', 'class')
 
       # A URL to the license for this module.
-      LicenseUri = 'https://github.com/plastikfan/Klassy/blob/master/LICENSE'
+      LicenseUri = 'https://github.com/eliziumnet/Klassy/blob/master/LICENSE'
 
       # A URL to the main website for this project.
-      ProjectUri = 'https://github.com/plastikfan/Klassy'
+      ProjectUri = 'https://github.com/eliziumnet/Klassy'
 
       # A URL to an icon representing this module.
       # IconUri = ''
