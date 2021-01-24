@@ -62,14 +62,21 @@ class UndoRename : Undo {
   }
 
   [string] generate() {
-    $($this.Operations.count - 1)..0 | ForEach-Object {
-      [PSCustomObject]$operation = $this.Operations[$_];
+    [string]$result = if ($this.Operations.count -gt 0) {
+      $($this.Operations.count - 1)..0 | ForEach-Object {
+        [PSCustomObject]$operation = $this.Operations[$_];
 
-      [string]$toPath = Join-Path -Path $operation.Directory -ChildPath $operation.To;
-      $this.Shell.rename($toPath, $operation.From);
+        [string]$toPath = Join-Path -Path $operation.Directory -ChildPath $operation.To;
+        $this.Shell.rename($toPath, $operation.From);
+      }
+
+      $this.Shell._builder.ToString();
+    }
+    else {
+      [string]::Empty;
     }
 
-    return $this.Shell._builder.ToString();
+    return $result;
   }
 
   [void] finalise() {
