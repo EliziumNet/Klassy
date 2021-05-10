@@ -202,7 +202,7 @@ task Compile @compileParams {
       "" >> $script:OutPsmPath;
       "# Custom Module Initialisation" >> $script:OutPsmPath;
       "#" >> $script:OutPsmPath;
-    
+
       $moduleInitContent = Get-Content -LiteralPath $moduleInitPath;
       $moduleInitContent >> $script:OutPsmPath;
     }
@@ -271,7 +271,11 @@ task Pester {
   $configuration.TestResult.OutputPath = $resultFile;
 
   if (-not([string]::IsNullOrEmpty($env:tag))) {
+    Write-Host "Running tests tagged '$env:tag'"
     $configuration.Filter.Tag = $env:tag
+  }
+  else {
+    Write-Host "Running all tests"
   }
 
   Invoke-Pester -Configuration $configuration

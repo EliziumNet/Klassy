@@ -9,3 +9,4 @@
 Class library containing the following silos of class definitions
 
 - :shell: Shelly: shell operations
+- :scroll: ChangeLog: Create a pretty 'Keep a change log'
