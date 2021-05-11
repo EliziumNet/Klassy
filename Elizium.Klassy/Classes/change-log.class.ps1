@@ -210,10 +210,12 @@ class Git : SourceControl {
     [string[]]$Header,
     [string]$Delim
   ) {
+    Write-Debug "ReadGitCommitsInRange: RANGE: '$($Range)', FORMAT: '$($Format)'.";
+
     $commitContent = (git log $Range --format=$Format);
     [array]$result = $commitContent | ConvertFrom-Csv -Delimiter $Delim -Header $Header;
 
-    $result | ForEach-Object {
+    $result | Where-Object { $null -ne $_.CommitId } | ForEach-Object {
       Add-Member -InputObject $_ -PassThru -NotePropertyMembers @{
         PSTypeName = 'Loopz.ChangeLog.CommitInfo';
         FullHash   = $_.CommitId;
@@ -350,8 +352,11 @@ class ChangeLog {
   [hashtable] processCommits() {
     [PSCustomObject[]]$tags = $this.GetTagsInRange($false);
 
-    [string]$format = "%ai`t%H`t%an`t%s`t%b";
-    [string[]]$header = @("Date", "CommitId", "Author", "Subject", "Body");
+    # NB: WARNING, do not select the body; if it is multiline, then it will break
+    # all of this, because the assumption is that 1 commit = 1 line of content
+    #
+    [string]$format = "%ai`t%H`t%an`t%s";
+    [string[]]$header = @("Date", "CommitId", "Author", "Subject");
     [string]$delim = "`t";
 
     [boolean]$untilMissing = -not(($this.Options.Tags)?.Until);
@@ -853,8 +858,7 @@ class GroupByImpl : GroupBy {
             $com.Info = [PSCustomObject]@{
               PSTypeName = 'Loopz.ChangeLog.CommitInfo';
               Selectors  = $selectors;
-              IsBreaking = $($groups.ContainsKey('break') -and $groups['break'].Success) -or `
-              ($(${com}.Body) -and $($com.Body.Contains('BREAKING CHANGE')));
+              IsBreaking = $($groups.ContainsKey('break') -and $groups['break'].Success)
               Groups     = $groups;
             }
 

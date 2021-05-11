@@ -1,4 +1,4 @@
-using module "..\..\Output\Elizium.Klassy\Elizium.Klassy.psm1"
+﻿using module "..\..\Output\Elizium.Klassy\Elizium.Klassy.psm1"
 
 Set-StrictMode -Version 1.0
 
@@ -21,7 +21,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
       # commit messages, it may be necessary to define regex(s) that don't contain these fields.
       #
       [string[]]$script:_includes = @(
-        $('^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' + 
+        $('^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
           '(?:\((?<scope>[\w]+)\))?(?<break>!)?:\s(?:#(?<issue>\d{1,6}))?(?<body>[\w\W\s]+)$'),
 
         $('^\(?(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
@@ -33,7 +33,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
   }
 
   BeforeEach {
-    # NB: test data taken from Loopz as there are more commits there to work from 
+    # NB: test data taken from Loopz as there are more commits there to work from
     #
     InModuleScope Elizium.Klassy {
       # The options object should be persisted to the current directory. The user
@@ -203,7 +203,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
               'MD033' = 'no-inline-html';
             }
           }
-            
+
           Template            =
           @"
 # Changelog
@@ -219,7 +219,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
 "@
         }
       } # $_options
-      
+
 
       [scriptblock]$script:_readRemoteUrl = {
         return 'https://github.com/EliziumNet/Loopz'
@@ -256,7 +256,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
             Label      = 'HEAD';
             Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
           }
-          $tags = @(, $head) + $tags; 
+          $tags = @(, $head) + $tags;
         }
 
         return $tags;
@@ -265,6 +265,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
       [scriptblock]$script:_readGitCommitsInRange = {
 
         [OutputType([PSCustomObject[]])]
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '')]
         param(
           [string]$Format,
           [string]$Range,
@@ -692,7 +693,9 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
 
       [ChangeLog]$script:_changeLog, $null = Get-TestChangeLog -Options $_options;
 
+
       function script:Show-Releases {
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
         param(
           [hashtable]$Releases,
           [ChangeLog]$changer
@@ -1412,7 +1415,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
 
           # [string]$outputPath = '~\Changelog.klassy.md';
           # Set-Content -LiteralPath $outputPath -Value $content;
-        } 
+        }
       }
     }
   } # given: ChangeLog with Git
@@ -1567,6 +1570,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
 
           ) {
             InModuleScope Elizium.Klassy -Parameters @{ Statement = $statement; Expected = $expected } {
+              [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
               Param(
                 [string]$statement,
                 [string]$expected
@@ -1584,7 +1588,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
                 Write-Host $("+ ACTUAL: '$($result)'");
               }
               $assertion | Should -BeTrue;
-                
+
               # Make sure every statement evaluated can run ok without a commit object
               # as is the case when a heading invokes Evaluate.
               #
