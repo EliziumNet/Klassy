@@ -72,6 +72,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             #
             Include    = $_includes;
             Exclude    = $_excludes;
+            Change = '^[\w]+'; # only applied if the matching include not include 'change' named group
           }
         }
         SourceControl = [PSCustomObject]@{
@@ -230,14 +231,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [[warnings]]
 [[content]]
 [[links]]
-Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
+Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 "@
         }
       } # $_options
 
 
       [scriptblock]$script:_readRemoteUrl = {
-        return 'https://github.com/EliziumNet/Loopz'
+        return 'https://github.com/EliziumNet/Klassy'
       }
 
       [scriptblock]$script:_readGitTags = {
@@ -1428,8 +1429,8 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
           [string]$content = $changeLog.Build();
           $content | Should -Not -BeNullOrEmpty;
 
-          # [string]$outputPath = '~\Changelog.klassy.md';
-          # Set-Content -LiteralPath $outputPath -Value $content;
+          [string]$outputPath = '~\Changelog.klassy.md';
+          Set-Content -LiteralPath $outputPath -Value $content;
         }
       }
     }
@@ -1471,6 +1472,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
             'commitid'      = 'dc800c6';
             'commitid-link' = $("[dc800c6](https://github.com/EliziumNet/Loopz/" +
               "commit/dc800c68e4aaa6be692c8254490945ad73f69e6d)");
+            'is-breaking'   = $_commit.Info.IsBreaking;
             'issue-link'    = "[#145](https://github.com/EliziumNet/Loopz/issues/145)";
             'subject'       = $_subject;
             'scope'         = 'pstools';

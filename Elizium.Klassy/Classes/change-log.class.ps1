@@ -115,6 +115,8 @@ class SourceControl {
     [regex]$versionRegex = [regex]::new("(?<ver>\d\.\d\.\d)");
 
     [array]$result = foreach ($prettyTag in $gitTags) {
+      Write-Debug "SourceControl.processTags - TAG: '$prettyTag'";
+
       if ($tagRegex.IsMatch($prettyTag)) {
         [System.Text.RegularExpressions.MatchCollection]$mc = $tagRegex.Matches($prettyTag);
         [System.Text.RegularExpressions.Match]$m = $mc[0];
@@ -490,8 +492,9 @@ class ChangeLog {
       # No commits for release
       #
       $result = @{
-        Dirty = $commitsInRange;
-        Label = $untilLabel;
+        PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
+        Dirty      = $commitsInRange;
+        Label      = $untilLabel;
       };
     }
 
@@ -800,6 +803,20 @@ class GroupByImpl : GroupBy {
     [System.Collections.Generic.List[PSCustomObject]]$partitioned = `
       [System.Collections.Generic.List[PSCustomObject]]::new();
 
+    [regex]$changeRegex = if ($this.Options.Selection.Subject?.Change -and
+      -not([string]::IsNullOrEmpty($this.Options.Selection.Subject.Change))) {
+        [regex]::new($this.Options.Selection.Subject.Change);
+    }
+    else {
+      $null;
+    }
+    [string[]]$changeTypes = $(
+      $this.Options.Output.Lookup.ChangeTypes.Keys | Where-Object {
+        $_ -ne '?' } | ForEach-Object {
+          $_.ToLower();
+        }
+    );
+
     foreach ($tag in $sortedTags) {
       if ($releases.ContainsKey($tag.Label)) {
         [PSCustomObject]$release = $releases[$tag.Label];
@@ -838,7 +855,8 @@ class GroupByImpl : GroupBy {
                 # value, so translate to something more explicit.
                 #
                 $selectors[$_] = if ($_ -eq 'break') {
-                  [string]::IsNullOrEmpty($groups[$_]) ? 'non-breaking' : 'breaking';
+                  [string]::IsNullOrEmpty($groups[$_]) ? `
+                    [ChangeLogSchema]::NON_BREAKING : [ChangeLogSchema]::BREAKING;
                 }
                 else {
                   $groups[$_];
@@ -846,12 +864,18 @@ class GroupByImpl : GroupBy {
               }
             }
 
-            if (-not($groups.ContainsKey('change'))) {
-              # TODO: try categorising the change by other means. This will be difficult
-              # and depends on the quality of the commit messages. The user will have
-              # to perform some manual re-arrangement of commits by change type in the
-              # generated output.
-              #
+            if (-not($groups.ContainsKey('change')) -and ($null -ne $changeRegex)) {
+              if ($groups.ContainsKey('body') -and $groups['body'].Success) {
+                [string]$body = $groups['body'].Value;
+
+                if ($changeRegex.IsMatch($body)) {
+                  [string]$change = $changeRegex.Matches($body)[0].Value.Trim().ToLower();
+
+                  if ($changeTypes -contains $change) {
+                    $selectors['change'] = $change;
+                  }
+                }
+              }
             }
 
             $com.Info = [PSCustomObject]@{
@@ -951,7 +975,12 @@ class GroupByImpl : GroupBy {
           $squashed.Add($selectLast ? $item[-1] : $item[0]);
         }
         else {
-          throw "flatten: found bad squashed item of type $($item.GetType()) for release: '$($squashedRelease.Label)'";
+          throw [System.Management.Automation.MethodInvocationException]::new(
+            $(
+              "GroupByImpl.flatten: found bad squashed item of type " +
+              "$($item.GetType()) for release: '$($squashedRelease.Label)'"
+            )
+          );
         }
       }
     }
@@ -1222,6 +1251,8 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
   }
 } # MarkdownChangeLogGenerator
 
+# === [ ChangeLogSchema ] ======================================================
+#
 class ChangeLogSchema {
   static [string]$PREFIXES = '?!&^*+';
   static [regex]$FieldRegex = [regex]::new(
@@ -1231,6 +1262,8 @@ class ChangeLogSchema {
     return "$($prefix){$($symbol)}";
   }
   static [string[]]$SEGMENTS = @('break', 'change', 'scope', 'type');
+  static [string]$BREAKING = 'breaking';
+  static [string]$NON_BREAKING = 'non-breaking';
 } # ChangeLogSchema
 
 # === [ GeneratorUtils ] =======================================================
@@ -1450,7 +1483,7 @@ class GeneratorUtils {
       'avatar-img'    = $this.AvatarImg($commit.Author);
       'date'          = $commit.Date.ToString($this.Output.Literals.DateFormat);
       'display-tag'   = [GeneratorUtils]::TagDisplayName($tagInfo.Label);
-      'breaking'      = $commit.Info.IsBreaking;
+      'is-breaking'   = $commit.Info.IsBreaking;
       'subject'       = $commit.Subject;
       'tag'           = $tagInfo.Label;
       'commitid'      = $commit.CommitId;
