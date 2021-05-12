@@ -108,7 +108,7 @@ class SourceControl {
     return $from, $until;
   }
 
-  # Returns: [PSTypeName('Loopz.ChangeLog.TagInfo')][array]
+  # Returns: [PSTypeName('Klassy.ChangeLog.TagInfo')][array]
   #
   [PSCustomObject[]] processTags ([PSCustomObject[]]$gitTags, [boolean]$includeHead) {
     [regex]$tagRegex = "(?<dt>[^\(]+)\(tag: (?<tag>[^\)]+)\)";
@@ -125,7 +125,7 @@ class SourceControl {
         [DateTime]$date = [DateTime]::Parse($dt)
 
         [PSCustomObject]$tagInfo = [PSCustomObject]@{
-          PSTypeName = 'Loopz.ChangeLog.TagInfo';
+          PSTypeName = 'Klassy.ChangeLog.TagInfo';
           Label      = $tag;
           Date       = $date;
         }
@@ -146,7 +146,7 @@ class SourceControl {
 
     if ($includeHead -and $this._headDate) {
       $result = $result += [PSCustomObject]@{
-        PSTypeName = 'Loopz.ChangeLog.TagInfo';
+        PSTypeName = 'Klassy.ChangeLog.TagInfo';
         Label      = 'HEAD';
         Date       = $this._headDate;
       }
@@ -202,7 +202,7 @@ class Git : SourceControl {
     return $this.processTags($tags, $includeHead);
   } # ReadGitTags
 
-  # Returns: [PSTypeName('Loopz.ChangeLog.CommitInfo')][]
+  # Returns: [PSTypeName('Klassy.ChangeLog.CommitInfo')][]
   #
   [PSCustomObject[]] ReadGitCommitsInRange(
     [string]$Format,
@@ -217,7 +217,7 @@ class Git : SourceControl {
 
     $result | Where-Object { $null -ne $_.CommitId } | ForEach-Object {
       Add-Member -InputObject $_ -PassThru -NotePropertyMembers @{
-        PSTypeName = 'Loopz.ChangeLog.CommitInfo';
+        PSTypeName = 'Klassy.ChangeLog.CommitInfo';
         FullHash   = $_.CommitId;
       }
     } | ForEach-Object {
@@ -281,7 +281,7 @@ class ChangeLog {
     return $content;
   }
 
-  # Return: [PSTypeName('Loopz.ChangeLog.PartitionedRelease')][array]
+  # Return: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')][array]
   #
   [PSCustomObject[]] composePartitions() {
 
@@ -291,7 +291,7 @@ class ChangeLog {
     return $this._grouper.Partition($releases, $allTags);
   }
 
-  # Returns: ('Loopz.ChangeLog.CommitInfo')[]
+  # Returns: ('Klassy.ChangeLog.CommitInfo')[]
   #
   [PSCustomObject[]] GetTagsInRange([boolean]$includeHead) {
     [PSCustomObject[]]$allTags = $this.SourceControl.GetSortedTags($includeHead);
@@ -347,7 +347,7 @@ class ChangeLog {
     return $result;
   } # GetTagsInRange
 
-  # Returned releases are a hashtable keyed by tag label => [PSTypeName('Loopz.ChangeLog.SquashedRelease')]
+  # Returned releases are a hashtable keyed by tag label => [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
   #
   [hashtable] processCommits() {
     [PSCustomObject[]]$tags = $this.GetTagsInRange($false);
@@ -415,7 +415,7 @@ class ChangeLog {
   # - Label: until tag label for the release
   # - Dirty: array of unfiltered commits; release contains commits all filtered out.
   #
-  # Returns: [PSTypeName('Loopz.ChangeLog.SquashedRelease')]
+  # Returns: [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
   #
   [PSCustomObject] filterAndSquashCommits([array]$commitsInRange, [string]$untilLabel) {
     [array]$filtered = $this.filter($commitsInRange, $untilLabel);
@@ -464,7 +464,7 @@ class ChangeLog {
         }
       }
       [PSCustomObject]$release = [PSCustomObject]@{
-        PSTypeName = 'Loopz.ChangeLog.SquashedRelease';
+        PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
         Squashed   = $squashedHash;
         Commits    = $commitsWithoutIssueNo;
         Label      = $untilLabel;
@@ -473,7 +473,7 @@ class ChangeLog {
     }
     else {
       [PSCustomObject]$release = [PSCustomObject]@{
-        PSTypeName = 'Loopz.ChangeLog.SquashedRelease';
+        PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
         Commits    = $filtered;
         Label      = $untilLabel;
       }
@@ -632,10 +632,10 @@ class GroupByImpl : GroupBy {
   # Resolves a path to a leaf. The leaf represents the bucket of commits resolved
   # to from the path.
   #
-  # $segmentInfo: [PSTypeName('Loopz.ChangeLog.SegmentInfo')]
-  # $partitionedRelease: [PSTypeName('Loopz.ChangeLog.PartitionedRelease')]
-  # $handlers: [PSTypeName('Loopz.ChangeLog.Handler')]
-  # $custom: [PSTypeName('Loopz.ChangeLog.WalkInfo')]
+  # $segmentInfo: [PSTypeName('Klassy.ChangeLog.SegmentInfo')]
+  # $partitionedRelease: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')]
+  # $handlers: [PSTypeName('Klassy.ChangeLog.Handler')]
+  # $custom: [PSTypeName('Klassy.ChangeLog.WalkInfo')]
   #
   [PSCustomObject[]] resolve(
     [PSCustomObject]$segmentInfo,
@@ -651,26 +651,15 @@ class GroupByImpl : GroupBy {
 
       [int]$current = 0;
       foreach ($leg in $segmentInfo.Legs) {
-        if ($current -eq 0) {
-          # Invoke H3
-          #
-          $segmentInfo.ActiveSegment = $this._segments[$current];
-          $segmentInfo.ActiveLeg = $leg;
-          $handlers.OnHeading(
-            'H3', $this.Options.Output.Headings.H3,
-            $segmentInfo, $tagInfo, $handlers.Utils, $custom
-          );
-          $segmentInfo.ActiveSegment = [string]::Empty; # should be able to set this
-          $segmentInfo.ActiveLeg = [string]::Empty; # should be able to set this
-        }
+        # 0: H3, 1: H4, 2: H5, 3: H6
+        #
+        if ($current -le 3) {
+          [string]$headingNumeral = $("H$($current + 3)");
 
-        if ($current -eq 1) {
-          # Invoke H4
-          #
           $segmentInfo.ActiveSegment = $this._segments[$current];
           $segmentInfo.ActiveLeg = $leg;
           $handlers.OnHeading(
-            'H4', $this.Options.Output.Headings.H4,
+            $headingNumeral, $this.Options.Output.Headings.$headingNumeral,
             $segmentInfo, $tagInfo, $handlers.Utils, $custom
           );
           $segmentInfo.ActiveSegment = [string]::Empty;
@@ -696,7 +685,7 @@ class GroupByImpl : GroupBy {
     return $commits;
   } # resolve
 
-  # Returns: [PSTypeName('Loopz.ChangeLog.SegmentInfo')]
+  # Returns: [PSTypeName('Klassy.ChangeLog.SegmentInfo')]
   #
   [PSCustomObject] createSegmentInfo([string]$path) {
     [string[]]$legs = ($path -split '/') | Where-Object { $_ -ne $this._prefix; }
@@ -716,7 +705,7 @@ class GroupByImpl : GroupBy {
     [string]$decoratedPath = $decoratedSegments -join '/';
 
     [PSCustomObject]$segmentInfo = [PSCustomObject]@{
-      PSTypeName    = 'Loopz.ChangeLog.SegmentInfo';
+      PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
       Path          = $path;
       Legs          = $legs;
       DecoratedPath = $decoratedPath;
@@ -734,9 +723,9 @@ class GroupByImpl : GroupBy {
 
   # A partitioned release contains Partitions and Tag members
   #
-  # $partitionedRelease: [PSTypeName('Loopz.ChangeLog.PartitionedRelease')]
-  # $handlers: [PSTypeName('Loopz.ChangeLog.Handlers')]
-  # $custom: [PSTypeName('Loopz.ChangeLog.WalkInfo')]
+  # $partitionedRelease: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')]
+  # $handlers: [PSTypeName('Klassy.ChangeLog.Handlers')]
+  # $custom: [PSTypeName('Klassy.ChangeLog.WalkInfo')]
   #
   [void] Walk(
     [PSCustomObject]$partitionedRelease,
@@ -765,7 +754,7 @@ class GroupByImpl : GroupBy {
       }
 
       [PSCustomObject]$segmentInfo = [PSCustomObject]@{
-        PSTypeName    = 'Loopz.ChangeLog.SegmentInfo';
+        PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
         Path          = [string]::Empty;
         DecoratedPath = [string]::Empty;
       }
@@ -774,7 +763,7 @@ class GroupByImpl : GroupBy {
 
     if (($cleanCount -eq 0) -and $partitions.ContainsKey($this._dirty)) {
       [PSCustomObject]$segmentInfo = [PSCustomObject]@{
-        PSTypeName    = 'Loopz.ChangeLog.SegmentInfo';
+        PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
         Path          = [string]::Empty;
         DecoratedPath = [string]::Empty;
         IsDirty       = $true;
@@ -801,9 +790,9 @@ class GroupByImpl : GroupBy {
   # if it's in a hash. So, we need an array. Partition will return an array of
   # PSCustomObjects containing fields: Tag, Partitions and Paths.
   #
-  # $sortedTags: [PSTypeName('Loopz.ChangeLog.TagInfo')]
+  # $sortedTags: [PSTypeName('Klassy.ChangeLog.TagInfo')]
   #
-  # Returns: [PSTypeName('Loopz.ChangeLog.PartitionedRelease')][array]
+  # Returns: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')][array]
   #
   [PSCustomObject[]] Partition([hashtable]$releases, [PSCustomObject[]]$sortedTags) {
 
@@ -841,9 +830,19 @@ class GroupByImpl : GroupBy {
             [System.Text.RegularExpressions.MatchCollection]$mc = $partitionRegex.Matches($com.Subject);
             [System.Text.RegularExpressions.GroupCollection]$groups = $mc[0].Groups;
 
-            'change', 'scope', 'type' | ForEach-Object {
+            [ChangeLogSchema]::SEGMENTS | ForEach-Object {
               if ($groups.ContainsKey($_) ) {
                 $selectors[$_] = $groups[$_];
+
+                # Exception override for break, the '!' is not a very useful
+                # value, so translate to something more explicit.
+                #
+                $selectors[$_] = if ($_ -eq 'break') {
+                  [string]::IsNullOrEmpty($groups[$_]) ? 'non-breaking' : 'breaking';
+                }
+                else {
+                  $groups[$_];
+                }
               }
             }
 
@@ -856,9 +855,9 @@ class GroupByImpl : GroupBy {
             }
 
             $com.Info = [PSCustomObject]@{
-              PSTypeName = 'Loopz.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
               Selectors  = $selectors;
-              IsBreaking = $($groups.ContainsKey('break') -and $groups['break'].Success)
+              IsBreaking = $($groups.ContainsKey('break') -and $groups['break'].Success);
               Groups     = $groups;
             }
 
@@ -912,7 +911,7 @@ class GroupByImpl : GroupBy {
         $paths = $($paths | Get-Unique);
 
         $partitionItem = [PSCustomObject]@{
-          PSTypeName = 'Loopz.ChangeLog.PartitionedRelease';
+          PSTypeName = 'Klassy.ChangeLog.PartitionedRelease';
           Tag        = $tag;
           Partitions = $partitions;
           Paths      = $paths;
@@ -928,9 +927,9 @@ class GroupByImpl : GroupBy {
     return $partitioned;
   } # Partition
 
-  # $squashedRelease: [PSTypeName('Loopz.ChangeLog.SquashedRelease')]
+  # $squashedRelease: [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
   #
-  # Returns: [PSTypeName('Loopz.ChangeLog.CommitInfo')][array]
+  # Returns: [PSTypeName('Klassy.ChangeLog.CommitInfo')][array]
   #
   [PSCustomObject[]] flatten([PSCustomObject]$squashedRelease) {
 
@@ -1036,7 +1035,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
   ): base ($options, $sourceControl, $grouper) {
 
     [PSCustomObject]$generatorInfo = [PSCustomObject]@{
-      PSTypeName = 'Loopz.ChangeLog.GeneratorInfo';
+      PSTypeName = 'Klassy.ChangeLog.GeneratorInfo';
       #
       BaseUrl    = $this._baseUrl;
     }
@@ -1052,11 +1051,11 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
 
     [scriptblock]$OnCommit = {
       param(
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.SegmentInfo')]$segmentInfo,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.CommitInfo')]$commit,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.TagInfo')]$tagInfo,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.CommitInfo')]$commit,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
         [GeneratorUtils]$utils,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.WalkInfo')]$custom
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
       )
       [PSCustomObject]$output = $custom.Options.Output;
       [string]$commitStmt = $output.Statements.Commit;
@@ -1068,10 +1067,10 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
 
     [scriptblock]$OnEndBucket = {
       param(
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.SegmentInfo')]$segmentInfo,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.TagInfo')]$tagInfo,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
         [GeneratorUtils]$utils,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.WalkInfo')]$custom
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
       )
       [PSCustomObject]$output = $custom.Options.Output;
 
@@ -1085,10 +1084,10 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
       param(
         [string]$headingType,
         [string]$headingStmt,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.SegmentInfo')]$segmentInfo,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.WalkInfo')]$tagInfo,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$tagInfo,
         [GeneratorUtils]$utils,
-        [System.Management.Automation.PSTypeName('Loopz.ChangeLog.WalkInfo')]$custom
+        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
       )
       [string]$prefix = [GeneratorUtils]::HeadingPrefix($headingType);
       if (-not($headingStmt.StartsWith($prefix))) {
@@ -1104,7 +1103,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     } # OnHeading
 
     [PSCustomObject]$handlers = [PSCustomObject]@{
-      PSTypeName = 'Loopz.ChangeLog.Handlers';
+      PSTypeName = 'Klassy.ChangeLog.Handlers';
       Utils      = $this._utils;
     }
 
@@ -1142,7 +1141,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
       [void]$builder.AppendLine([string]::Empty);
 
       [PSCustomObject]$customWalkInfo = [PSCustomObject]@{
-        PSTypeName = 'Loopz.ChangeLog.WalkInfo';
+        PSTypeName = 'Klassy.ChangeLog.WalkInfo';
         Builder    = $builder;
         Options    = $this.Options;
       }
@@ -1231,6 +1230,7 @@ class ChangeLogSchema {
   static [string] Snippet([char]$prefix, [string]$symbol) {
     return "$($prefix){$($symbol)}";
   }
+  static [string[]]$SEGMENTS = @('break', 'change', 'scope', 'type');
 } # ChangeLogSchema
 
 # === [ GeneratorUtils ] =======================================================
@@ -1243,31 +1243,39 @@ class GeneratorUtils {
   static [hashtable]$_headings = @{
     'H3'    = '### ';
     'H4'    = '#### ';
+    'H5'    = '##### ';
+    'H6'    = '###### ';
     'Dirty' = '### ';
   };
 
   static [hashtable]$_lookups = @{
     '_A' = [PSCustomObject]@{
-      PSTypeName = 'Loopz.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
       Instance   = 'Authors';
       Variable   = 'author';
     };
 
+    '_B' = [PSCustomObject]@{
+      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
+      Instance   = 'Breaking';
+      Variable   = 'break';
+    };
+
     '_C' = [PSCustomObject]@{
-      PSTypeName = 'Loopz.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
       Instance   = 'ChangeTypes';
       Variable   = 'change';
     };
 
 
     '_S' = [PSCustomObject]@{
-      PSTypeName = 'Loopz.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
       Instance   = 'Scopes';
       Variable   = 'scope';
     };
 
     '_T' = [PSCustomObject]@{
-      PSTypeName = 'Loopz.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
       Instance   = 'Types';
       Variable   = 'type';
     };
@@ -1426,7 +1434,7 @@ class GeneratorUtils {
       'tag'         = $tagInfo.Label;
     }
 
-    'change', 'scope', 'type' | ForEach-Object {
+    [ChangeLogSchema]::SEGMENTS | ForEach-Object {
       if (${segmentInfo}?.$_) {
         $headingVariables[$_] = $segmentInfo.$_;
       }
@@ -1442,6 +1450,7 @@ class GeneratorUtils {
       'avatar-img'    = $this.AvatarImg($commit.Author);
       'date'          = $commit.Date.ToString($this.Output.Literals.DateFormat);
       'display-tag'   = [GeneratorUtils]::TagDisplayName($tagInfo.Label);
+      'breaking'      = $commit.Info.IsBreaking;
       'subject'       = $commit.Subject;
       'tag'           = $tagInfo.Label;
       'commitid'      = $commit.CommitId;
@@ -1457,7 +1466,7 @@ class GeneratorUtils {
     }
 
     if (${commit}?.Info) {
-      'change', 'scope', 'type' | ForEach-Object {
+      [ChangeLogSchema]::SEGMENTS | ForEach-Object {
         if ($commit.Info.Selectors.ContainsKey($_)) {
           $commitVariables[$_] = $commit.Info.Selectors[$_];
         }

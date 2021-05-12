@@ -93,38 +93,51 @@ Describe 'ChangeLog' -Tag 'ch-log' {
           #
         }
         Output        = [PSCustomObject]@{
-          PSTypeName          = 'Klassy.ChangeLog.Options.Output';
+          PSTypeName = 'Klassy.ChangeLog.Options.Output';
           #
           # special variables:
-          # -> &{_T} = type => indexes into the Types hash
-          # -> &{_S} = scope => indexes into the Scopes hash if defined
+          # -> &{_A} = change => indexes into the Authors hash
+          # -> &{_B} = change => indexes into the Breaking hash
           # -> &{_C} = change => indexes into the Change hash
+          # -> &{_S} = scope => indexes into the Scopes hash if defined
+          # -> &{_T} = type => indexes into the Types hash
           #
-          Headings            = [PSCustomObject]@{ # document headings
+          Headings   = [PSCustomObject]@{ # document headings
             PSTypeName = 'Klassy.ChangeLog.Options.Output.Headings';
             #
             H2         = 'Release [+{display-tag}] / +{date}';
             H3         = '*{scopeStmt}';
             H4         = '*{typeStmt}';
+            H5         = '*{breakingStmt}'
+            H6         = '*{changeStmt}';
             Dirty      = 'DIRTY: *{dirtyStmt}';
           }
 
           # => /#change-log/##release/###scope/####type
           # /#change-log/##release/ is fixed and can't be customised
           #
-          # valid GroupBy legs are: scope/type/change, which can be specified in
-          # any order. Only the first 2 map to headings H3 and H4.
+          # valid GroupBy legs are: scope/type/change/breaking, which can be specified in
+          # any order. Only the first 4 map to headings H3, H4, H5 and H6
           #
-          GroupBy             = 'scope/type';
+          GroupBy    = 'scope/type/break/change';
 
-          LookUp              = [PSCustomObject]@{ # => '&'
+          LookUp     = [PSCustomObject]@{ # => '&'
             PSTypeName  = 'Klassy.ChangeLog.Options.Output.Lookup';
             #
             # => &{_A} ('_A' is a synonym of 'author')
             #
             Authors     = @{
               'plastikfan' = ':bird:';
-              '?'          = 'woman_office_worker';
+              '?'          = ':woman_office_worker:';
+            }
+            # => &{_B} ('_B' is a synonym of 'break')
+            # In the regex, breaking change is indicated by ! (in accordance with
+            # established wisdom) and this is translated into 'breaking', and if
+            # missing, 'non-breaking', hence the following loop up keys.
+            #
+            Breaking    = @{
+              'breaking'     = ':warning: BREAKING CHANGES';
+              'non-breaking' = ':recycle: NON BREAKING CHANGES';
             }
             # => &{_C} ('_C' is a synonym of 'change')
             #
@@ -170,20 +183,22 @@ Describe 'ChangeLog' -Tag 'ch-log' {
               '?'     = ':lock:';
             }
           }
-          Literals            = [PSCustomObject]@{ # => '!'
+          Literals   = [PSCustomObject]@{ # => '!'
             PSTypeName    = 'Klassy.ChangeLog.Options.Output.Literals';
             #
             Break         = ':warning:';
+            NonBreak      = ':recycle:';
             BucketEnd     = '---';
             DateFormat    = 'yyyy-MM-dd';
             Dirty         = ':poop:';
             Uncategorised = ':anger:';
           }
-          Statements          = [PSCustomObject]@{ # => '*'
+          Statements = [PSCustomObject]@{ # => '*'
             PSTypeName = 'Klassy.ChangeLog.Options.Output.Statements';
             #
             Author     = ' by `@+{author}` +{avatar-img}'; # &{_A}: Author, +{avatar}: git-avatar
             Break      = '!{break} *BREAKING CHANGE* ';
+            Breaking   = '&{_B}';
             Change     = '[Change Type: &{_C}+{change}] => ';
             IssueLink  = ' \<+{issue-link}\>';
             Meta       = ' (Id: +{commitid-link})?{issueLinkStmt}'; # issue-link must be conditional
@@ -194,9 +209,9 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             Subject    = 'Subject: **+{subject}**';
             Type       = 'Commit-Type(&{_T} +{type})';
           }
-          Warnings            = [PSCustomObject]@{
+          Warnings   = [PSCustomObject]@{
             PSTypeName = 'Klassy.ChangeLog.Options.Output.Warnings';
-            Disable = @{
+            Disable    = @{
               'MD253' = 'line-length';
               'MD024' = 'no-duplicate-heading/no-duplicate-header';
               'MD026' = 'no-trailing-punctuation';
@@ -204,7 +219,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             }
           }
 
-          Template            =
+          Template   =
           @"
 # Changelog
 
@@ -1320,7 +1335,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
           }
 
           [PSCustomObject]$script:_handlers = [PSCustomObject]@{
-            PSTypeName  = 'Klassy.ChangeLog.Handlers';
+            PSTypeName = 'Klassy.ChangeLog.Handlers';
           }
 
           $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnHeading' -Value $(
@@ -1407,7 +1422,7 @@ Powered By [:nazar_amulet: Elizium.Klassy](https://github.com/EliziumNet/Loopz)
 
   Describe 'given: ChangeLog with Git' {
     Context 'and: klassy' {
-      It 'should: Build real change log' {
+      It 'should: Build real change log' -Tag 'Current' {
         InModuleScope Elizium.Klassy {
           [ChangeLog]$changeLog = New-ChangeLog -Options $_options;
           [string]$content = $changeLog.Build();
