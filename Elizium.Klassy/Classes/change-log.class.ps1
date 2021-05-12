@@ -1223,15 +1223,23 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
   }
 } # MarkdownChangeLogGenerator
 
+class ChangeLogSchema {
+  static [string]$PREFIXES = '?!&^*+';
+  static [regex]$FieldRegex = [regex]::new(
+    "(?<prefix>[$([ChangeLogSchema]::PREFIXES)])\{(?<symbol>[\w\-]+)\}"
+  );
+  static [string] Snippet([char]$prefix, [string]$symbol) {
+    return "$($prefix){$($symbol)}";
+  }
+} # ChangeLogSchema
+
 # === [ GeneratorUtils ] =======================================================
 #
 class GeneratorUtils {
   [PSCustomObject]$Options;
   [PSCustomObject]$Output;
   [PSCustomObject]$GeneratorInfo;
-  [regex]$_fieldRegex;
 
-  static [string]$PREFIXES = '?!&^*+';
   static [hashtable]$_headings = @{
     'H3'    = '### ';
     'H4'    = '#### ';
@@ -1269,34 +1277,30 @@ class GeneratorUtils {
     $this.Options = $options;
     $this.Output = $options.Output;
     $this.GeneratorInfo = $generatorInfo;
-
-    $this._fieldRegex = [regex]::new(
-      "(?<prefix>[$([GeneratorUtils]::PREFIXES)])\{(?<symbol>[\w\-]+)\}"
-    );
   }
 
   static [string] ConditionalSnippet([string]$value) {
-    return "?{$value}";
+    return [ChangeLogSchema]::Snippet('?', $value)
   }
 
   static [string] LiteralSnippet([string]$value) {
-    return "!{$value}";
+    return [ChangeLogSchema]::Snippet('!', $value)
   }
 
   static [string] LookupSnippet([string]$value) {
-    return "&{$value}";
+    return [ChangeLogSchema]::Snippet('&', $value)
   }
 
   static [string] NamedGroupRefSnippet([string]$value) {
-    return "^{$value}";
+    return [ChangeLogSchema]::Snippet('^', $value)
   }
 
   static [string] StatementSnippet([string]$value) {
-    return "*{$value}";
+    return [ChangeLogSchema]::Snippet('*', $value)
   }
 
   static [string] VariableSnippet([string]$value) {
-    return "+{$value}";
+    return [ChangeLogSchema]::Snippet('+', $value)
   }
 
   static [string] HeadingPrefix([string]$headingType) {
@@ -1306,7 +1310,7 @@ class GeneratorUtils {
 
   static [string] AnySnippetExpression($value) {
     [string]$escaped = [regex]::Escape("{$value}");
-    return "(?:[$([GeneratorUtils]::PREFIXES)])$($escaped)";
+    return "(?:[$([ChangeLogSchema]::PREFIXES)])$($escaped)";
   }
 
   static [string] TagDisplayName([string]$label) {
@@ -1478,8 +1482,8 @@ class GeneratorUtils {
     [hashtable]$variables,
     [string[]]$trail) {
 
-    [string]$result = if ($this._fieldRegex.IsMatch($source)) {
-      [System.Text.RegularExpressions.MatchCollection]$mc = $this._fieldRegex.Matches($source);
+    [string]$result = if ([ChangeLogSchema]::FieldRegex.IsMatch($source)) {
+      [System.Text.RegularExpressions.MatchCollection]$mc = [ChangeLogSchema]::FieldRegex.Matches($source);
 
       [string]$evolve = $source;
       foreach ($m in $mc) {
@@ -1643,6 +1647,6 @@ class GeneratorUtils {
   } # evaluateStmt
 
   [string] ClearUnresolvedFields($value) {
-    return $this._fieldRegex.Replace($value, '');
+    return [ChangeLogSchema]::FieldRegex.Replace($value, '');
   }
 } # GeneratorUtils

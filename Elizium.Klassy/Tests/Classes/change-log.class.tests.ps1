@@ -101,7 +101,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
           # -> &{_C} = change => indexes into the Change hash
           #
           Headings            = [PSCustomObject]@{ # document headings
-            PSTypeName = 'Klassy.ChangeLog.Options.Output.Heading';
+            PSTypeName = 'Klassy.ChangeLog.Options.Output.Headings';
             #
             H2         = 'Release [+{display-tag}] / +{date}';
             H3         = '*{scopeStmt}';
