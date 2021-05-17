@@ -3,7 +3,7 @@ using namespace System.Text.RegularExpressions;
 
 task . Clean, Build, Tests, Stats
 task Tests ImportCompiledModule, Pester
-task CreateManifest CopyPSD, UpdatePublicFunctionsToExport
+task CreateManifest CopyPSD, UpdatePublicFunctionsToExport, CopyFileList
 task Build Compile, CreateManifest
 task Stats RemoveStats, WriteStats
 task Ana Analyse
@@ -13,7 +13,9 @@ task BuildHelp Docs
 $script:ModuleName = Split-Path -Path $PSScriptRoot -Leaf
 $script:ModuleRoot = $PSScriptRoot
 $script:OutPutFolder = "$PSScriptRoot/Output"
+$script:FileListFolder = "$PSScriptRoot/FileList"
 $script:ImportFolders = @('Public', 'Internal', 'Classes')
+$script:ModuleOutPutFolder = Join-Path -Path $PSScriptRoot -ChildPath "Output/$($script:ModuleName)"
 $script:OutPsmPath = Join-Path -Path $PSScriptRoot -ChildPath "Output/$($script:ModuleName)/$($script:ModuleName).psm1"
 $script:OutPsdPath = Join-Path -Path $PSScriptRoot -ChildPath "Output/$($script:ModuleName)/$($script:ModuleName).psd1"
 
@@ -251,6 +253,20 @@ task UpdatePublicFunctionsToExport -if (Test-Path -Path $script:PublicFolder) {
 
       (Get-Content -Path $script:OutPsdPath) -replace "AliasesToExport\s*=\s*''", $aliasesStatement |
       Set-Content -Path $script:OutPsdPath
+    }
+  }
+}
+
+task CopyFileList {
+  if (Test-Path $script:FileListFolder) {
+    Get-ChildItem -File -LiteralPath $script:FileListFolder | ForEach-Object {
+      $copy = @{
+        Path        = $_.FullName
+        Destination = $script:ModuleOutPutFolder
+        Force       = $true
+        Verbose     = $true
+      }
+      Copy-Item @copy
     }
   }
 }

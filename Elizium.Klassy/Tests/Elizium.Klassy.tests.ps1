@@ -14,7 +14,7 @@ Describe "General project validation: $moduleName" {
 
   # TestCases are splatted to the script so we need hashtables
   $testCase = $scripts | Foreach-Object { @{file = $_ } }
-  It "Script <file> should be valid powershell" -TestCases $testCase -Tag 'Current' {
+  It "Script <file> should be valid powershell" -TestCases $testCase {
     param($file)
 
     $file.fullName | Should -Exist;

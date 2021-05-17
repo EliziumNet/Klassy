@@ -2,7 +2,7 @@
 
 Set-StrictMode -Version 1.0
 
-Describe 'ChangeLog' -Tag 'ch-log' {
+Describe 'ChangeLog' -Tag 'chog' {
   BeforeAll {
     Get-Module Elizium.Klassy | Remove-Module
     Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1 `
@@ -21,11 +21,26 @@ Describe 'ChangeLog' -Tag 'ch-log' {
       # commit messages, it may be necessary to define regex(s) that don't contain these fields.
       #
       [string[]]$script:_includes = @(
-        $('^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
-          '(?:\((?<scope>[\w]+)\))?(?<break>!)?:\s(?:#(?<issue>\d{1,6}))?(?<body>[\w\W\s]+)$'),
+        # feat(foo)!: Add new bar (#42)
+        #
+        $(
+          '^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
+          '(?:\((?<scope>[\w]+)\))?(?<break>!)?:\s(?<body>[\w\W\s]+)(?:\(#(?<issue>\d{1,6})\))'
+        )
 
-        $('^\(?(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
-          '\s+(?:#(?<issue>\d{1,6}))?\)?(?<break>!)?:\s(?<body>[\w\W\s]+)$')
+        # feat(foo)!: #42 Add new bar
+        #
+        $(
+          '^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
+          '(?:\((?<scope>[\w]+)\))?(?<break>!)?:\s(?:#(?<issue>\d{1,6}))(?<body>[\w\W\s]+)'
+        ),
+
+        # (feat #42)!: Add new bar
+        #
+        $(
+          '^\(?(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
+          '\s+(?:#(?<issue>\d{1,6}))?\)?(?<break>!)?:\s(?<body>[\w\W\s]+)'
+        )
       )
 
       [string[]]$script:_excludes = @()
@@ -36,6 +51,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
     # NB: test data taken from Loopz as there are more commits there to work from
     #
     InModuleScope Elizium.Klassy {
+
       # The options object should be persisted to the current directory. The user
       # should run in the repo root
       #
@@ -72,7 +88,17 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             #
             Include    = $_includes;
             Exclude    = $_excludes;
-            Change = '^[\w]+'; # only applied if the matching include not include 'change' named group
+            Change     = '^[\w]+'; # only applied if the matching include not include 'change' named group
+          }
+          Tags                = [PSCustomObject]@{
+            PSTypeName = 'Klassy.ChangeLog.Options.Selection.Tags';
+            # FROM, commits that come after the TAG
+            # UNTIL, commits up to and including TAG
+            #
+            # In these tests, there is no default, however, when we generate
+            # the default config, the default here will be Until = 'HEAD',
+            # which means get everything
+            #
           }
         }
         SourceControl = [PSCustomObject]@{
@@ -82,16 +108,6 @@ Describe 'ChangeLog' -Tag 'ch-log' {
           HostUrl      = 'https://github.com/';
           AvatarSize   = '24';
           CommitIdSize = 7;
-        }
-        Tags          = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Tags';
-          # FROM, commits that come after the TAG
-          # UNTIL, commits up to and including TAG
-          #
-          # In these tests, there is no default, however, when we generate
-          # the default config, the default here will be Until = 'HEAD',
-          # which means get everything
-          #
         }
         Output        = [PSCustomObject]@{
           PSTypeName = 'Klassy.ChangeLog.Options.Output';
@@ -107,10 +123,10 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             PSTypeName = 'Klassy.ChangeLog.Options.Output.Headings';
             #
             H2         = 'Release [+{display-tag}] / +{date}';
-            H3         = '*{scopeStmt}';
-            H4         = '*{typeStmt}';
-            H5         = '*{breakingStmt}'
-            H6         = '*{changeStmt}';
+            H3         = '*{$}'; # *{$} is translated into the correct statement from groupBy
+            H4         = '*{$}';
+            H5         = '*{$}';
+            H6         = '*{$}';
             Dirty      = 'DIRTY: *{dirtyStmt}';
           }
 
@@ -123,11 +139,11 @@ Describe 'ChangeLog' -Tag 'ch-log' {
           GroupBy    = 'scope/type/break/change';
 
           LookUp     = [PSCustomObject]@{ # => '&'
-            PSTypeName  = 'Klassy.ChangeLog.Options.Output.Lookup';
+            PSTypeName     = 'Klassy.ChangeLog.Options.Output.Lookup';
             #
             # => &{_A} ('_A' is a synonym of 'author')
             #
-            Authors     = @{
+            Authors        = @{
               'plastikfan' = ':bird:';
               '?'          = ':woman_office_worker:';
             }
@@ -136,14 +152,15 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             # established wisdom) and this is translated into 'breaking', and if
             # missing, 'non-breaking', hence the following loop up keys.
             #
-            Breaking    = @{
+            BreakingStatus = @{
               'breaking'     = ':warning: BREAKING CHANGES';
               'non-breaking' = ':recycle: NON BREAKING CHANGES';
             }
             # => &{_C} ('_C' is a synonym of 'change')
             #
-            ChangeTypes = @{ # The first word in the commit subject after 'type(scope): '
+            ChangeTypes    = @{ # The first word in the commit subject after 'type(scope): '
               'Add'       = ':heavy_plus_sign:';
+              'Change'    = ':copyright:';
               'Fixed'     = ':beetle:';
               'Deprecate' = ':heavy_multiplication_x:'
               'Remove'    = ':heavy_minus_sign:';
@@ -153,7 +170,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             }
             # => &{_S} ('_S' is a synonym of 'scope')
             #
-            Scopes      = @{
+            Scopes         = @{
               # this is user defined. It should be maintained. Known scopes in
               # the project should be defined here
               #
@@ -169,7 +186,7 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             # => &{_T} ('_T' is a synonym of 'type')
             # (These types must be consistent with includes regex)
             #
-            Types       = @{
+            Types          = @{
               'fix'   = ':sparkles:';
               'feat'  = ':gift:';
               'build' = ':hammer:';
@@ -187,28 +204,32 @@ Describe 'ChangeLog' -Tag 'ch-log' {
           Literals   = [PSCustomObject]@{ # => '!'
             PSTypeName    = 'Klassy.ChangeLog.Options.Output.Literals';
             #
-            Break         = ':warning:';
-            NonBreak      = ':recycle:';
+            Broken        = ':warning:';
+            NotBroken     = ':recycle:';
             BucketEnd     = '---';
             DateFormat    = 'yyyy-MM-dd';
             Dirty         = ':poop:';
-            Uncategorised = ':anger:';
+            Uncategorised = 'uncategorised';
           }
           Statements = [PSCustomObject]@{ # => '*'
-            PSTypeName = 'Klassy.ChangeLog.Options.Output.Statements';
+            PSTypeName  = 'Klassy.ChangeLog.Options.Output.Statements';
             #
-            Author     = ' by `@+{author}` +{avatar-img}'; # &{_A}: Author, +{avatar}: git-avatar
-            Break      = '!{break} *BREAKING CHANGE* ';
-            Breaking   = '&{_B}';
-            Change     = '[Change Type: &{_C}+{change}] => ';
-            IssueLink  = ' \<+{issue-link}\>';
-            Meta       = ' (Id: +{commitid-link})?{issueLinkStmt}'; # issue-link must be conditional
-            Commit     = '+ ?{breakStmt}?{squashedStmt}*{changeStmt}*{subjectStmt}*{authorStmt}*{metaStmt}';
-            Dirty      = '!{dirty}';
-            Scope      = 'Scope(&{_S} +{scope})';
-            Squashed   = 'SQUASHED: ';
-            Subject    = 'Subject: **+{subject}**';
-            Type       = 'Commit-Type(&{_T} +{type})';
+            ActiveScope = "+{scope}";
+            Author      = ' by `@+{author}` &{_A}'; # &{_A}: Author, +{avatar}: git-avatar
+            Avatar      = ' by `@+{author}` +{avatar-img}';
+            Break       = '!{broken} *BREAKING CHANGE* ';
+            Breaking    = '&{_B}';
+            Change      = '[Change Type: &{_C}+{change}] => ';
+            IssueLink   = ' \<+{issue-link}\>';
+            Meta        = ' (Id: +{commitid-link})?{issue-link;issueLinkStmt}'; # issue-link must be conditional
+            Commit      = '+ ?{is-breaking;breakStmt}?{is-squashed;squashedStmt}*{changeStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
+            DirtyCommit = "+ ?{is-breaking;breakingStmt}+{subject}";
+            Dirty       = '!{dirty}';
+            Scope       = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
+            Squashed    = 'SQUASHED: ';
+            Subject     = 'Subject: **+{subject}**';
+            Type        = 'Commit-Type(&{_T} +{type})';
+            Ungrouped   = "UNGROUPED!";
           }
           Warnings   = [PSCustomObject]@{
             PSTypeName = 'Klassy.ChangeLog.Options.Output.Warnings';
@@ -220,402 +241,14 @@ Describe 'ChangeLog' -Tag 'ch-log' {
             }
           }
 
-          Template   =
-          @"
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-[[warnings]]
-[[content]]
-[[links]]
-Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
-"@
+          Template   = $(Get-Content -Path './Tests/Data/changelog/TEMPLATE.md' -Raw);
         }
       } # $_options
 
-
-      [scriptblock]$script:_readRemoteUrl = {
-        return 'https://github.com/EliziumNet/Klassy'
-      }
-
-      [scriptblock]$script:_readGitTags = {
-        [OutputType([PSCustomObject[]])]
-        param(
-          [boolean]$includeHead
-        )
-
-        [PSCustomObject[]]$tags = (@(
-            @('3.0.2', ([DateTime]::Parse('2021-04-19 18:17:15 +0100'))),
-            @('3.0.1', ([DateTime]::Parse('2021-04-19 16:32:22 +0100'))),
-            @('3.0.0', ([DateTime]::Parse('2021-04-15 19:30:42 +0100'))),
-            @('2.0.0', ([DateTime]::Parse('2021-01-18 16:06:43 +0000'))),
-            @('1.2.0', ([DateTime]::Parse('2020-09-17 20:07:59 +0100'))),
-            @('1.1.1', ([DateTime]::Parse('2020-09-02 16:40:04 +0100'))),
-            @('1.1.0', ([DateTime]::Parse('2020-08-21 19:20:22 +0100'))),
-            @('1.0.1', ([DateTime]::Parse('2020-08-18 15:14:21 +0100'))),
-            @('1.0.0', ([DateTime]::Parse('2020-08-18 14:44:59 +0100')))
-          ) | ForEach-Object {
-            [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.TagInfo';
-              Label      = $_[0];
-              Date       = $_[1];
-              Version    = [system.version]::new($_[0]);
-            }
-          });
-
-        if ($includeHead) {
-          [PSCustomObject]$head = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.TagInfo';
-            Label      = 'HEAD';
-            Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
-          }
-          $tags = @(, $head) + $tags;
-        }
-
-        return $tags;
-      }
-
-      [scriptblock]$script:_readGitCommitsInRange = {
-
-        [OutputType([PSCustomObject[]])]
-        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '')]
-        param(
-          [string]$Format,
-          [string]$Range,
-          [string[]]$Header,
-          [string]$Delim
-        )
-        # Write-Host "Getting commits for range: '$Range'"
-
-        [hashtable]$commitFeed = @{
-          # 3.0.2..HEAD (unreleased)
-          #
-          '3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a'  = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
-            CommitId   = '9cadab32fd3feb3996ca933ddd2a751ae28e641a';
-            Author     = 'plastikfan';
-            Subject    = "fix(foo): #999 Merge branch 'release/3.0.2'";
-          };
-
-          # 3.0.1..3.0.2
-          #
-          '3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-19 18:17:15 +0100');
-            CommitId   = '7bd92c2e3476687311e9cb0e75218ace1a7ef5ce';
-            Author     = 'plastikfan';
-            Subject    = "Bump version to 3.0.2";
-          };
-
-          '3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-19 17:10:14 +0100');
-            CommitId   = '23e25cbff58be51c173bb807f49fed78ad289cdf';
-            Author     = 'plastikfan';
-            Subject    = "fix(signals)!: #151 Change Test-HostSupportsEmojis to return false for mac & linux";
-          }
-
-          # 3.0.0..3.0.1
-          #
-          '3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-19 16:23:44 +0100');
-            CommitId   = 'b2eef128d0ebc3b9775675a3b6481f0eb41a79e6';
-            Author     = 'plastikfan';
-            Subject    = "Merge branch 'feature/change-command-pipeline-invocation'";
-          };
-
-          '3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-19 16:17:04 +0100');
-            CommitId   = 'dc800c68e4aaa6be692c8254490945ad73f69e6d';
-            Author     = 'plastikfan';
-            Subject    = "feat(pstools): #145 Allow command to be invoked with the Name parameter instead of using pipeline";
-          };
-
-          '3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-19 13:25:29 +0100');
-            CommitId   = '283093511fb2f67b4026e6b319b87acf5b2eac49';
-            Author     = 'plastikfan';
-            Subject    = "chore(pstools): #147 get-CommandDetail is now an internal function";
-          };
-
-          # 2.0.0..3.0.0
-          #
-          '2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-15 16:57:41 +0100');
-            CommitId   = 'b0c917486bc71056622d22bc763abcf7687db4d5';
-            Author     = 'plastikfan';
-            Subject    = "(fix #64)!: Add Trigger count to Summary";
-          };
-
-          '2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-15 13:24:57');
-            CommitId   = 'd227403012774896857387d9f11e7d35d36b703b';
-            Author     = 'plastikfan';
-            Subject    = "(doc #127): Minor docn tweaks";
-          };
-
-          '2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-15 12:09:19 +0100');
-            CommitId   = 'b055f0b43d1c0518b36b9fa48d23baeac03e55e2';
-            Author     = 'plastikfan';
-            Subject    = "(doc #127): Add boostrap docn";
-          };
-
-          '2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-15 09:53:47 +0100');
-            CommitId   = 'b4bdc4b507f50e3a0a953ce2f167415f4fff78a0';
-            Author     = 'plastikfan';
-            Subject    = "(doc #127): Fix links in markdown";
-          };
-
-          '2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-04-15 09:21:51 +0100');
-            CommitId   = '31277e6725a753a20d80d3504615fbdb16344a22';
-            Author     = 'plastikfan';
-            Subject    = "(doc #127): Add docn for Test-IsAlreadyAnchoredAt";
-          };
-
-          # 1.2.0..2.0.0
-          #
-          '1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-01-15 08:59:36');
-            CommitId   = '8e04f6c75325ddd7cb66303f71501ec26aac07ae';
-            Author     = 'plastikfan';
-            Subject    = "feature/fix-select-text-env-var-not-def";
-          };
-
-          '1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-01-15 08:57:53');
-            CommitId   = 'fe2db959f9b1e8fd902b080b44a5508adeebaeb9';
-            Author     = 'plastikfan';
-            Subject    = "(fix #98):Select-Patterns; When no filter supplied and LOOPZ_GREPS_FILTER not defined, default to ./*.*";
-          };
-
-          '1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-01-14 20:20:02');
-            CommitId   = '54db603182807ef213b111519fd05b547cc5ea1e';
-            Author     = 'plastikfan';
-            Subject    = "(fix #98): Rename Select-Text to Select-Patterns";
-          };
-
-          '1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2021-01-14 19:52:13');
-            CommitId   = '193df3a22c60fe1d6a06b2cf9771968bbf0b0490';
-            Author     = 'plastikfan';
-            Subject    = "(doc #89): fix typos in README";
-          };
-
-          # 1.1.1..1.2.0
-          #
-          '1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-09-17 11:29:13');
-            CommitId   = '7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c';
-            Author     = 'plastikfan';
-            Subject    = "(fix #36): Minor controller/test improvements";
-          };
-
-          '1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-09-16 22:49:55');
-            CommitId   = 'ab3a9579019b7800c06e95f5af7e3683b321de9c';
-            Author     = 'plastikfan';
-            Subject    = "(fix #36): Add controller tests";
-          };
-
-          '1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-09-16 15:11:29 +0100');
-            CommitId   = '5130be22558649f5a7ba69689d7416a29b288d40';
-            Author     = 'plastikfan';
-            Subject    = "(fix #36): Fix New-Controller parameter sets";
-          };
-
-          '1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-09-03 13:45:41 +0100');
-            CommitId   = 'e280dea7daea7ae99f7517c876f05ef138538e02';
-            Author     = 'plastikfan';
-            Subject    = "(fix #34): Make tests platform friendly (break on first item)";
-          };
-
-          '1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-09-03 12:50:33 +0100');
-            CommitId   = '22287029a3a86f1f2c9cd73433075ec8a1d543f3';
-            Author     = 'plastikfan';
-            Subject    = "(fix #34)!: Fix Tests broken on mac";
-          };
-
-          # 1.1.0..1.1.1
-          #
-          '1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-09-02 16:37:01 +0100');
-            CommitId   = '124ae0e81d4e8af762a986c24d0f8c2609f3b694';
-            Author     = 'plastikfan';
-            Subject    = "fix Analyse task";
-          };
-
-          '1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-31 11:50:59 +0100');
-            CommitId   = 'fac0998be058cc00398066b333516c9aea4c61c4';
-            Author     = 'plastikfan';
-            Subject    = "(fix #35): Catch the MethodInvocationException";
-          };
-
-          '1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-29 16:36:27 +0100');
-            CommitId   = '06d055c6a79062439596c42ecf63a0f5ee42ee8d';
-            Author     = 'plastikfan';
-            Subject    = "Merge branch 'feature/fix-mirror-whatif";
-          };
-
-          '1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-29 16:35:01 +0100');
-            CommitId   = '379aefde5a2cd10dcc6d19e2e07691e9d8c74c80';
-            Author     = 'plastikfan';
-            Subject    = "(fix: #34): Use WhatIf appropriately (not on directory creation)";
-          };
-
-          '1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-29 10:01:25 +0100');
-            CommitId   = '15eeb4c2098060afb68e28bf04dd88c5dbc19366';
-            Author     = 'plastikfan';
-            Subject    = "(fix: #33): remove incorrect parameter validation on FuncteeParams";
-          };
-
-          # 1.0.1..1.1.0
-          #
-          '1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-21 19:13:17 +0100');
-            CommitId   = '5e2b4279b0775cfa1fbf9032691ca910ed4c7979';
-            Author     = 'plastikfan';
-            Subject    = "(feat #24): Export functions and variables properly via psm";
-          };
-
-          '1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-21 16:30:25 +0100');
-            CommitId   = 'abc321c70f16627d1f657cbdee99de89f21c27c8';
-            Author     = 'plastikfan';
-            Subject    = "rename edit-RemoveSingleSubString.tests.ps1";
-          };
-
-          '1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-21 14:19:37 +0100');
-            CommitId   = 'fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f';
-            Author     = 'plastikfan';
-            Subject    = "Merge branch 'feature/fix-utility-globals";
-          };
-
-          '1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-21 14:08:07 +0100');
-            CommitId   = 'a055776bebc1c1fa7a329f7df6c6d946c17431f4';
-            Author     = 'plastikfan';
-            Subject    = "(feat #24): dont add files to FunctionsToExport if they are not of the form verb-noun";
-          };
-
-          # 1.0.0..1.0.1
-          #
-          '1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275' = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
-            Date       = [DateTime]::Parse('2020-08-18 15:14:21 +0100');
-            CommitId   = '11120d3c4ec110123417fcb36423403486d02275';
-            Author     = 'plastikfan';
-            Subject    = "Bump version to 1.0.1";
-          }
-        }
-
-        [hashtable]$commitsByTag = @{
-          '3.0.2..HEAD'  = @(
-            $commitFeed['3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a']
-          );
-
-          '3.0.1..3.0.2' = @(
-            $commitFeed['3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce'],
-            $commitFeed['3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf']
-          );
-
-          '3.0.0..3.0.1' = @(
-            $commitFeed['3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6'],
-            $commitFeed['3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d'],
-            $commitFeed['3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49']
-          );
-
-          '2.0.0..3.0.0' = @(
-            $commitFeed['2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5'],
-            $commitFeed['2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b'],
-            $commitFeed['2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2'],
-            $commitFeed['2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0'],
-            $commitFeed['2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22']
-          );
-
-          '1.2.0..2.0.0' = @(
-            $commitFeed['1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae'],
-            $commitFeed['1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9'],
-            $commitFeed['1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e'],
-            $commitFeed['1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490']
-          );
-
-          '1.1.1..1.2.0' = @(
-            $commitFeed['1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c'],
-            $commitFeed['1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c'],
-            $commitFeed['1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40'],
-            $commitFeed['1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02'],
-            $commitFeed['1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3']
-          );
-
-          '1.1.0..1.1.1' = @(
-            $commitFeed['1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694'],
-            $commitFeed['1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4'],
-            $commitFeed['1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d'],
-            $commitFeed['1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80'],
-            $commitFeed['1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366']
-          );
-
-          '1.0.1..1.1.0' = @(
-            $commitFeed['1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979'],
-            $commitFeed['1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8'],
-            $commitFeed['1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f'],
-            $commitFeed['1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4']
-          );
-
-          '1.0.0..1.0.1' = @(
-            $commitFeed['1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275']
-          );
-        }
-
-        [array]$commits = if ($commitsByTag.ContainsKey($Range)) {
-          $commitsByTag[$Range];
-        }
-        else {
-          throw "Failed: update commitsByTag to include range: '$Range'";
-        }
-        return $commits;
+      [PSCustomObject]$script:_head = [PSCustomObject]@{
+        PSTypeName = 'Klassy.ChangeLog.TagInfo';
+        Label      = 'HEAD';
+        Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
       }
 
       # === [ FakeGit ] ==============================================================
@@ -623,22 +256,39 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       # https://github.com/PowerShell/PSScriptAnalyzer/issues/1584
       #
       class FakeGit : SourceControl {
-        #
-        # Ideally, this class should go into tests. However, in Pester, for some reason,
-        # we can access the type as class ([FakeGit]::new(...) is ok), but we can't inherit
-        # from it: (FakeGit : SourceControl breaks in Pester)
-        #
-        [PSCustomObject]$_provider;
+        [PSCustomObject]$_headTag;
 
-        FakeGit([PSCustomObject]$options, [PSCustomObject]$provider): base($options) {
-          $this._provider = $provider;
+        FakeGit([PSCustomObject]$options, [PSCustomObject]$head): base($options) {
 
+          $this._headTag = $head;
           $this._headDate = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
         }
 
-        # !!!
         [PSCustomObject[]] ReadGitTags([boolean]$includeHead) {
-          return $this._provider.ReadGitTags($includeHead);
+          [PSCustomObject[]]$tags = (@(
+              @('3.0.2', ([DateTime]::Parse('2021-04-19 18:17:15 +0100'))),
+              @('3.0.1', ([DateTime]::Parse('2021-04-19 16:32:22 +0100'))),
+              @('3.0.0', ([DateTime]::Parse('2021-04-15 19:30:42 +0100'))),
+              @('2.0.0', ([DateTime]::Parse('2021-01-18 16:06:43 +0000'))),
+              @('1.2.0', ([DateTime]::Parse('2020-09-17 20:07:59 +0100'))),
+              @('1.1.1', ([DateTime]::Parse('2020-09-02 16:40:04 +0100'))),
+              @('1.1.0', ([DateTime]::Parse('2020-08-21 19:20:22 +0100'))),
+              @('1.0.1', ([DateTime]::Parse('2020-08-18 15:14:21 +0100'))),
+              @('1.0.0', ([DateTime]::Parse('2020-08-18 14:44:59 +0100')))
+            ) | ForEach-Object {
+              [PSCustomObject]@{
+                PSTypeName = 'Klassy.ChangeLog.TagInfo';
+                Label      = $_[0];
+                Date       = $_[1];
+                Version    = [system.version]::new($_[0]);
+              }
+            });
+
+          if ($includeHead) {
+            $tags = @(, $this._headTag) + $tags;
+          }
+
+          return $tags;
         }
 
         [PSCustomObject[]] ReadGitCommitsInRange(
@@ -647,49 +297,360 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           [string[]]$Header,
           [string]$Delim
         ) {
-          return $this._provider.ReadGitCommitsInRange(
-            $Format, $Range, $Header, $Delim
-          );
+          [hashtable]$commitFeed = @{
+            # 3.0.2..HEAD (unreleased)
+            #
+            '3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a'  = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
+              CommitId   = '9cadab32fd3feb3996ca933ddd2a751ae28e641a';
+              Author     = 'plastikfan';
+              Subject    = "fix(foo): #999 Merge branch 'release/3.0.2'";
+            };
+
+            # 3.0.1..3.0.2
+            #
+            '3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-19 18:17:15 +0100');
+              CommitId   = '7bd92c2e3476687311e9cb0e75218ace1a7ef5ce';
+              Author     = 'plastikfan';
+              Subject    = "Bump version to 3.0.2";
+            };
+
+            '3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-19 17:10:14 +0100');
+              CommitId   = '23e25cbff58be51c173bb807f49fed78ad289cdf';
+              Author     = 'plastikfan';
+              Subject    = "fix(signals)!: #151 Change Test-HostSupportsEmojis to return false for mac & linux";
+            }
+
+            # 3.0.0..3.0.1
+            #
+            '3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-19 16:23:44 +0100');
+              CommitId   = 'b2eef128d0ebc3b9775675a3b6481f0eb41a79e6';
+              Author     = 'plastikfan';
+              Subject    = "Merge branch 'feature/change-command-pipeline-invocation'";
+            };
+
+            '3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-19 16:17:04 +0100');
+              CommitId   = 'dc800c68e4aaa6be692c8254490945ad73f69e6d';
+              Author     = 'plastikfan';
+              Subject    = "feat(pstools): #145 Allow command to be invoked with the Name parameter instead of using pipeline";
+            };
+
+            '3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-19 13:25:29 +0100');
+              CommitId   = '283093511fb2f67b4026e6b319b87acf5b2eac49';
+              Author     = 'plastikfan';
+              Subject    = "chore(pstools): #147 get-CommandDetail is now an internal function";
+            };
+
+            # 2.0.0..3.0.0
+            #
+            '2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-15 16:57:41 +0100');
+              CommitId   = 'b0c917486bc71056622d22bc763abcf7687db4d5';
+              Author     = 'plastikfan';
+              Subject    = "(fix #64)!: Add Trigger count to Summary";
+            };
+
+            '2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-15 13:24:57');
+              CommitId   = 'd227403012774896857387d9f11e7d35d36b703b';
+              Author     = 'plastikfan';
+              Subject    = "(doc #127): Minor docn tweaks";
+            };
+
+            '2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-15 12:09:19 +0100');
+              CommitId   = 'b055f0b43d1c0518b36b9fa48d23baeac03e55e2';
+              Author     = 'plastikfan';
+              Subject    = "(doc #127): Add boostrap docn";
+            };
+
+            '2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-15 09:53:47 +0100');
+              CommitId   = 'b4bdc4b507f50e3a0a953ce2f167415f4fff78a0';
+              Author     = 'plastikfan';
+              Subject    = "(doc #127): Fix links in markdown";
+            };
+
+            '2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-04-15 09:21:51 +0100');
+              CommitId   = '31277e6725a753a20d80d3504615fbdb16344a22';
+              Author     = 'plastikfan';
+              Subject    = "(doc #127): Add docn for Test-IsAlreadyAnchoredAt";
+            };
+
+            # 1.2.0..2.0.0
+            #
+            '1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-01-15 08:59:36');
+              CommitId   = '8e04f6c75325ddd7cb66303f71501ec26aac07ae';
+              Author     = 'plastikfan';
+              Subject    = "feature/fix-select-text-env-var-not-def";
+            };
+
+            '1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-01-15 08:57:53');
+              CommitId   = 'fe2db959f9b1e8fd902b080b44a5508adeebaeb9';
+              Author     = 'plastikfan';
+              Subject    = "(fix #98):Select-Patterns; When no filter supplied and LOOPZ_GREPS_FILTER not defined, default to ./*.*";
+            };
+
+            '1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-01-14 20:20:02');
+              CommitId   = '54db603182807ef213b111519fd05b547cc5ea1e';
+              Author     = 'plastikfan';
+              Subject    = "(fix #98): Rename Select-Text to Select-Patterns";
+            };
+
+            '1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2021-01-14 19:52:13');
+              CommitId   = '193df3a22c60fe1d6a06b2cf9771968bbf0b0490';
+              Author     = 'plastikfan';
+              Subject    = "(doc #89): fix typos in README";
+            };
+
+            # 1.1.1..1.2.0
+            #
+            '1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-09-17 11:29:13');
+              CommitId   = '7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c';
+              Author     = 'plastikfan';
+              Subject    = "(fix #36): Minor controller/test improvements";
+            };
+
+            '1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-09-16 22:49:55');
+              CommitId   = 'ab3a9579019b7800c06e95f5af7e3683b321de9c';
+              Author     = 'plastikfan';
+              Subject    = "(fix #36): Add controller tests";
+            };
+
+            '1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-09-16 15:11:29 +0100');
+              CommitId   = '5130be22558649f5a7ba69689d7416a29b288d40';
+              Author     = 'plastikfan';
+              Subject    = "(fix #36): Fix New-Controller parameter sets";
+            };
+
+            '1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-09-03 13:45:41 +0100');
+              CommitId   = 'e280dea7daea7ae99f7517c876f05ef138538e02';
+              Author     = 'plastikfan';
+              Subject    = "(fix #34): Make tests platform friendly (break on first item)";
+            };
+
+            '1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-09-03 12:50:33 +0100');
+              CommitId   = '22287029a3a86f1f2c9cd73433075ec8a1d543f3';
+              Author     = 'plastikfan';
+              Subject    = "(fix #34)!: Fix Tests broken on mac";
+            };
+
+            # 1.1.0..1.1.1
+            #
+            '1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-09-02 16:37:01 +0100');
+              CommitId   = '124ae0e81d4e8af762a986c24d0f8c2609f3b694';
+              Author     = 'plastikfan';
+              Subject    = "fix Analyse task";
+            };
+
+            '1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-31 11:50:59 +0100');
+              CommitId   = 'fac0998be058cc00398066b333516c9aea4c61c4';
+              Author     = 'plastikfan';
+              Subject    = "(fix #35): Catch the MethodInvocationException";
+            };
+
+            '1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-29 16:36:27 +0100');
+              CommitId   = '06d055c6a79062439596c42ecf63a0f5ee42ee8d';
+              Author     = 'plastikfan';
+              Subject    = "Merge branch 'feature/fix-mirror-whatif";
+            };
+
+            '1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-29 16:35:01 +0100');
+              CommitId   = '379aefde5a2cd10dcc6d19e2e07691e9d8c74c80';
+              Author     = 'plastikfan';
+              Subject    = "(fix: #34): Use WhatIf appropriately (not on directory creation)";
+            };
+
+            '1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-29 10:01:25 +0100');
+              CommitId   = '15eeb4c2098060afb68e28bf04dd88c5dbc19366';
+              Author     = 'plastikfan';
+              Subject    = "(fix: #33): remove incorrect parameter validation on FuncteeParams";
+            };
+
+            # 1.0.1..1.1.0
+            #
+            '1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-21 19:13:17 +0100');
+              CommitId   = '5e2b4279b0775cfa1fbf9032691ca910ed4c7979';
+              Author     = 'plastikfan';
+              Subject    = "(feat #24): Export functions and variables properly via psm";
+            };
+
+            '1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-21 16:30:25 +0100');
+              CommitId   = 'abc321c70f16627d1f657cbdee99de89f21c27c8';
+              Author     = 'plastikfan';
+              Subject    = "rename edit-RemoveSingleSubString.tests.ps1";
+            };
+
+            '1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-21 14:19:37 +0100');
+              CommitId   = 'fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f';
+              Author     = 'plastikfan';
+              Subject    = "Merge branch 'feature/fix-utility-globals";
+            };
+
+            '1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-21 14:08:07 +0100');
+              CommitId   = 'a055776bebc1c1fa7a329f7df6c6d946c17431f4';
+              Author     = 'plastikfan';
+              Subject    = "(feat #24): dont add files to FunctionsToExport if they are not of the form verb-noun";
+            };
+
+            # 1.0.0..1.0.1
+            #
+            '1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275' = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-18 15:14:21 +0100');
+              CommitId   = '11120d3c4ec110123417fcb36423403486d02275';
+              Author     = 'plastikfan';
+              Subject    = "Bump version to 1.0.1";
+            }
+
+            # 1.0.0 
+            #
+            '1.0.0/3884bbec11f622f0c5ea8474049a891c02e0eb09'        = [PSCustomObject]@{
+              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              Date       = [DateTime]::Parse('2020-08-17 13:59:08 +0100');
+              CommitId   = '3884bbec11f622f0c5ea8474049a891c02e0eb09';
+              Author     = 'plastikfan';
+              Subject    = "(feat #20): Rm ITEM-VALUE/PROPERTIES; use Pairs instead; Partial check";
+            }
+          }
+
+
+          [hashtable]$commitsByTag = @{
+            '3.0.2..HEAD'  = @(
+              $commitFeed['3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a']
+            );
+
+            '3.0.1..3.0.2' = @(
+              $commitFeed['3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce'],
+              $commitFeed['3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf']
+            );
+
+            '3.0.0..3.0.1' = @(
+              $commitFeed['3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6'],
+              $commitFeed['3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d'],
+              $commitFeed['3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49']
+            );
+
+            '2.0.0..3.0.0' = @(
+              $commitFeed['2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5'],
+              $commitFeed['2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b'],
+              $commitFeed['2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2'],
+              $commitFeed['2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0'],
+              $commitFeed['2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22']
+            );
+
+            '1.2.0..2.0.0' = @(
+              $commitFeed['1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae'],
+              $commitFeed['1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9'],
+              $commitFeed['1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e'],
+              $commitFeed['1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490']
+            );
+
+            '1.1.1..1.2.0' = @(
+              $commitFeed['1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c'],
+              $commitFeed['1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c'],
+              $commitFeed['1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40'],
+              $commitFeed['1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02'],
+              $commitFeed['1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3']
+            );
+
+            '1.1.0..1.1.1' = @(
+              $commitFeed['1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694'],
+              $commitFeed['1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4'],
+              $commitFeed['1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d'],
+              $commitFeed['1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80'],
+              $commitFeed['1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366']
+            );
+
+            '1.0.1..1.1.0' = @(
+              $commitFeed['1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979'],
+              $commitFeed['1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8'],
+              $commitFeed['1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f'],
+              $commitFeed['1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4']
+            );
+
+            '1.0.0..1.0.1' = @(
+              $commitFeed['1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275']
+            );
+
+            '1.0.0'        = @(
+              $commitFeed['1.0.0/3884bbec11f622f0c5ea8474049a891c02e0eb09']
+            )
+          }
+
+          [array]$commits = if ($commitsByTag.ContainsKey($Range)) {
+            $commitsByTag[$Range];
+          }
+          else {
+            throw "Failed: update commitsByTag to include range: '$Range'";
+          }
+          return $commits;
         }
 
         [string] ReadRemoteUrl() {
-          return $this._provider.ReadRemoteUrl();
-        }
-
-        [string] ReadRootPath() {
-          return $this._provider.ReadRootPath();
+          return 'https://github.com/EliziumNet/Klassy'
         }
       } # FakeGit
       function script:Get-TestChangeLog {
         [OutputType([GroupBy])]
         param(
-          [PSCustomObject]$Options,
-          [scriptblock]$readGitTags,
-          [scriptblock]$readGitCommitsInRange,
-          [scriptblock]$readRemoteUrl
+          [PSCustomObject]$Options
         )
-        # these script blocks should bge added to the provider as 'ScriptMethod' memberType
-        # which means they can be invoked as a normal method, instead of having to be invoked
-        # with the Invoke function. This also means that if the script block wanted to, it
-        # can use the $this reference.
-        #
-        [PSCustomObject]$provider = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Test.Provider';
-        }
 
-        $provider | Add-Member -MemberType ScriptMethod -Name 'ReadGitTags' -Value $(
-          ($null -ne $readGitTags) ? $readGitTags : $_readGitTags
-        );
-
-        $provider | Add-Member -MemberType ScriptMethod -Name 'ReadGitCommitsInRange' -Value $(
-          ($null -ne $readGitCommitsInRange) ? $readGitCommitsInRange : $_readGitCommitsInRange
-        );
-
-        $provider | Add-Member -MemberType ScriptMethod -Name 'ReadRemoteUrl' -Value $(
-          ($null -ne $readRemoteUrl) ? $readRemoteUrl : $_readRemoteUrl
-        );
-
-        [SourceControl]$fakeGit = [FakeGit]::new($Options, $provider);
+        [SourceControl]$fakeGit = [FakeGit]::new($Options, $_head);
         [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
         [MarkdownChangeLogGenerator]$generator = [MarkdownChangeLogGenerator]::new(
           $Options, $fakeGit, $grouper
@@ -708,7 +669,6 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       }
 
       [ChangeLog]$script:_changeLog, $null = Get-TestChangeLog -Options $_options;
-
 
       function script:Show-Releases {
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
@@ -773,7 +733,8 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       Context 'and: full history (no tags defined)' {
         It 'should: return all tags' {
           InModuleScope Elizium.Klassy {
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
+            $_changeLog.Init();
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 10;
 
             $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
@@ -785,10 +746,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       Context 'and: full history (until = HEAD)' {
         It 'should: return all tags' {
           InModuleScope Elizium.Klassy {
-            $_changeLog.Options.Tags = [PSCustomObject]@{
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               Until = 'HEAD';
             }
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
+            $_changeLog.Init();
+
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 10;
 
             $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
@@ -800,13 +763,14 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       Context 'and: un-released' {
         It 'should: return last release' {
           InModuleScope Elizium.Klassy {
-            $_changeLog.Options.Tags = [PSCustomObject]@{
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               Unreleased = $true;
             }
+            $_changeLog.Init();
 
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
-            $result.Count | Should -Be 2;
-            $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
+            $result.Count | Should -Be 1;
+            $result[0].Label | Should -BeExactly 'HEAD';
           }
         }
       } # and: un-released
@@ -814,11 +778,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       Context 'and: since specified tag' {
         It 'should: return tags since' {
           InModuleScope Elizium.Klassy {
-            $_changeLog.Options.Tags = [PSCustomObject]@{
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               From = '3.0.0';
             }
+            $_changeLog.Init();
 
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 4;
             $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
             $result[3].Version.CompareTo([system.version]::new(3, 0, 0)) | Should -Be 0;
@@ -829,11 +794,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       Context 'and: until specified tag' {
         It 'should: return tags until' {
           InModuleScope Elizium.Klassy {
-            $_changeLog.Options.Tags = [PSCustomObject]@{
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               Until = '3.0.0';
             }
+            $_changeLog.Init();
 
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 7;
             $result[0].Version.CompareTo([system.version]::new(3, 0, 0)) | Should -Be 0;
             $result[6].Version.CompareTo([system.version]::new(1, 0, 0)) | Should -Be 0;
@@ -844,12 +810,13 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       Context 'and: between 2 specified tags' {
         It 'should: return tags in range' {
           InModuleScope Elizium.Klassy {
-            $_changeLog.Options.Tags = [PSCustomObject]@{
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               From  = '3.0.0';
               Until = '3.0.2';
             }
+            $_changeLog.Init();
 
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 3;
             $result[0].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
             $result[2].Version.CompareTo([system.version]::new(3, 0, 0)) | Should -Be 0;
@@ -859,32 +826,175 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 
         It 'should: return tags in range' {
           InModuleScope Elizium.Klassy {
-            $_changeLog.Options.Tags = [PSCustomObject]@{
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               From  = '1.1.1';
               Until = '1.2.0';
             }
+            $_changeLog.Init();
 
-            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange($true);
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 2;
             $result[0].Version.CompareTo([system.version]::new(1, 2, 0)) | Should -Be 0;
             $result[1].Version.CompareTo([system.version]::new(1, 1, 1)) | Should -Be 0;
+          }
+        }
+
+        It 'should: return tags in range' {
+          InModuleScope Elizium.Klassy {
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
+              Until = '1.0.0';
+            }
+            $_changeLog.Init();
+
+            [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
+            $result.Count | Should -Be 1;
+            $result[0].Version.CompareTo([system.version]::new(1, 0, 0)) | Should -Be 0;
           }
         }
       } # and: between 2 specified tags
     } # given: OrderBy descending
   } # GetTagsInRange
 
+  Context 'getRange' {
+    BeforeEach {
+      InModuleScope Elizium.Klassy {
+        function initialize-WithTagIndices {
+          #     0,     1,     2,     3,     4,     5,     6,     7,     8
+          # 3.0.2, 3.0.1, 3.0.0, 2.0.0, 1.2.0, 1.1.1, 1.1.0, 1.0.1, 1.0.0
+          #
+          [OutputType([hashtable])]
+          param(
+            [ChangeLog]$changeLog
+          )
+          $changeLog.Init();
+
+          [array]$tagsInRange = $_changeLog.TagsInRangeWithHead;
+          [hashtable]$indexOfTag = @{};
+
+          [string[]]$labelSequence = $tagsInRange.Label;
+          [int]$counter = 0;
+
+          $labelSequence | ForEach-Object {
+            $indexOfTag[$_] = $counter++; 
+          }
+
+          return [PSCustomObject]@{
+            IndexOfTag  = $indexOfTag;
+            TagsInRange = $tagsInRange;
+          }
+        }
+
+        [PSCustomObject]$_result = initialize-WithTagIndices -changeLog $_changeLog;
+        [hashtable]$script:_indexOfTag = $_result.IndexOfTag;
+        [array]$script:_tagsInRange = $_result.TagsInRange;
+      }
+    }
+
+    Context 'given: OrderBy descending' {
+      Context 'and: current is HEAD' {
+        It 'should: return correct range latest to HEAD' {
+          InModuleScope Elizium.Klassy {
+            [PSCustomObject]$current = $_head;
+
+            $_changeLog.getRange($current, $_tagsInRange).Range | Should -BeExactly '3.0.2..HEAD';
+          }
+        }
+      } # and: full history
+
+      Context 'and: current is earliest tag' {
+        It 'should: return current by itself' {
+          InModuleScope Elizium.Klassy {
+            [PSCustomObject]$current = $_tagsInRange[$_indexOfTag['1.0.0']];
+
+            $_changeLog.getRange($current, $_tagsInRange).Range | Should -BeExactly '1.0.0';
+          }
+        }
+      }
+
+      Context 'and: current is midway through tag sequence' {
+        It 'should: return current as until, and the previous (earlier) as from' {
+          InModuleScope Elizium.Klassy {
+            [PSCustomObject]$current = $_tagsInRange[$_indexOfTag['1.2.0']];
+
+            $_changeLog.getRange($current, $_tagsInRange).range | Should -BeExactly '1.1.1..1.2.0';
+          }
+        }
+      }
+    } # given: OrderBy descending
+  } #getRange
+
+  Describe 'Tag Validation' {
+    Context 'given: Unreleased specified' {
+      Context 'and: From is present' {
+        It 'should: throw' {
+          InModuleScope Elizium.Klassy {
+            {
+              $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
+                Until      = '1.0.0';
+                Unreleased = $true;
+              }
+              $_changeLog.Init();
+            } | Should -Throw;
+          }
+        }
+      }
+
+      Context 'and: Until is present' {
+        It 'should: throw' {
+          InModuleScope Elizium.Klassy {
+            {
+              $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
+                From       = '1.0.0';
+                Unreleased = $true;
+              }
+              $_changeLog.Init();
+            } | Should -Throw;
+          }
+        }
+      }
+    }
+
+    Context 'given: unknown tag is specified' {
+      It 'should: throw' {
+        InModuleScope Elizium.Klassy {
+          {
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
+              From = '1.0.0-blooper';
+            }
+            $_changeLog.Init();
+          } | Should -Throw;
+        }
+      }
+    }
+
+    Context 'given: From and Until specified in wrong order' {
+      It 'should: throw' {
+        InModuleScope Elizium.Klassy {
+          {
+            $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
+              From  = '3.0.0';
+              Until = '1.0.0';
+            }
+            $_changeLog.Init();
+          } | Should -Throw;          
+        }
+      }
+    }
+  }
+
   Context 'processCommits' {
     Context 'given: SquashBy enabled' {
       Context 'given: OrderBy descending' {
         Context 'and: IncludeMissingIssue enabled' {
           Context 'given: full history (no tags defined)' {
-            It 'should: return commits for all tags' {
+            It 'should: return commits for all tags' -Tag 'Pending' {
               InModuleScope Elizium.Klassy {
+                $_changeLog.Init();
+
                 [hashtable]$releases = $_changeLog.processCommits();
                 # Show-Releases -Releases $releases;
 
-                $releases.PSBase.Count | Should -Be 9;
+                $releases.PSBase.Count | Should -Be 10;
                 $releases['HEAD'].Squashed['999'].Subject | `
                   Should -BeExactly "fix(foo): #999 Merge branch 'release/3.0.2'";
               }
@@ -894,12 +1004,14 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           Context 'given: full history (until = HEAD)' {
             It 'should: return commits for all tags' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   Until = 'HEAD';
                 }
+                $_changeLog.Init();
+
                 [hashtable]$releases = $_changeLog.processCommits();
 
-                $releases.PSBase.Count | Should -Be 9;
+                $releases.PSBase.Count | Should -Be 10;
                 $releases['HEAD'].Squashed['999'].Subject | `
                   Should -BeExactly "fix(foo): #999 Merge branch 'release/3.0.2'";
               }
@@ -909,11 +1021,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           Context 'and: un-released' {
             It 'should: return commits since last release' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   Unreleased = $true;
                 }
-                [hashtable]$releases = $_changeLog.processCommits();
+                $_changeLog.Init();
 
+                [hashtable]$releases = $_changeLog.processCommits();
                 $releases.PSBase.Count | Should -Be 1;
                 # Un-squashed
                 #
@@ -926,12 +1039,13 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           Context 'and: since specified tag' {
             It 'should: return commits since' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   From = '3.0.0';
                 }
-                [hashtable]$releases = $_changeLog.processCommits();
+                $_changeLog.Init();
 
-                $releases.PSBase.Count | Should -Be 3;
+                [hashtable]$releases = $_changeLog.processCommits();
+                $releases.PSBase.Count | Should -Be 4;
                 # Un-Squashed
                 #
                 $releases['HEAD'].Squashed['999'].Subject | `
@@ -949,12 +1063,13 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           Context 'and: until specified tag' {
             It 'should: return commits until' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   Until = '3.0.0';
                 }
-                [hashtable]$releases = $_changeLog.processCommits();
+                $_changeLog.Init();
 
-                $releases.PSBase.Count | Should -Be 6;
+                [hashtable]$releases = $_changeLog.processCommits();
+                $releases.PSBase.Count | Should -Be 7;
                 # Releases that are verified in other tests are omitted for brevity
                 # (3.0.0 and 1.2.0)
 
@@ -986,13 +1101,14 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           Context 'and: between 2 specified tags' {
             It 'should: return commits in range' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   From  = '3.0.0';
                   Until = '3.0.2';
                 }
-                [hashtable]$releases = $_changeLog.processCommits();
+                $_changeLog.Init();
 
-                $releases.PSBase.Count | Should -Be 2;
+                [hashtable]$releases = $_changeLog.processCommits();
+                $releases.PSBase.Count | Should -Be 3;
                 # Un-squashed
                 #
                 $releases['3.0.2'].Squashed['151'].Subject | `
@@ -1008,13 +1124,14 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 
             It 'should: return commits in range' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   From  = '1.1.1';
                   Until = '1.2.0';
                 }
-                [hashtable]$releases = $_changeLog.processCommits();
+                $_changeLog.Init();
 
-                $releases.PSBase.Count | Should -Be 1;
+                [hashtable]$releases = $_changeLog.processCommits();
+                $releases.PSBase.Count | Should -Be 2;
                 # Squashed
                 #
                 [array]$squashed34 = $releases['1.2.0'].Squashed['34'];
@@ -1035,13 +1152,14 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 
             It 'should: return commits in range' {
               InModuleScope Elizium.Klassy {
-                $_changeLog.Options.Tags = [PSCustomObject]@{
+                $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
                   From  = '2.0.0';
                   Until = '3.0.0';
                 }
-                [hashtable]$releases = $_changeLog.processCommits();
+                $_changeLog.Init();
 
-                $releases.PSBase.Count | Should -Be 1;
+                [hashtable]$releases = $_changeLog.processCommits();
+                $releases.PSBase.Count | Should -Be 2;
                 # Squashed
                 #
                 [array]$squashed127 = $releases['3.0.0'].Squashed['127'];
@@ -1071,10 +1189,10 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             InModuleScope Elizium.Klassy {
               $_options.Selection.SquashBy = [string]::Empty;
               [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+              $changeLog.Init();
 
               [hashtable]$releases = $changeLog.processCommits();
-
-              $releases.PSBase.Count | Should -Be 9;
+              $releases.PSBase.Count | Should -Be 10;
 
               $releases['HEAD'].Commits.Count | Should -Be 1;
               $releases['3.0.2'].Commits.Count | Should -Be 1;
@@ -1099,10 +1217,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'scope/type';
             [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            $changeLog.Init();
+
             [array]$releases = $changeLog.composePartitions();
             Write-Debug "=== Built '$($releases.Count)' releases (path: '$($changeLog.Options.Output.GroupBy)')";
 
-            $releases.Count | Should -Be 9;
+            $releases.Count | Should -Be 10;
 
             $releases[0].Tag.Label | Should -Be 'HEAD';
             $releases[0].Partitions['foo']['fix'].Count | Should -Be 1;
@@ -1159,10 +1279,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'type/scope';
             [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            $changeLog.Init();
+
             [array]$releases = $changeLog.composePartitions();
             Write-Debug "=== Built '$($releases.Count)' releases (path: '$($changeLog.Options.Output.GroupBy)')";
 
-            $releases.Count | Should -Be 9;
+            $releases.Count | Should -Be 10;
 
             $releases[0].Tag.Label | Should -Be 'HEAD';
             $releases[0].Partitions['fix']['foo'].Count | Should -Be 1;
@@ -1219,10 +1341,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'type';
             [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            $changeLog.Init();
+
             [array]$releases = $changeLog.composePartitions();
             Write-Debug "=== Built '$($releases.Count)' releases (path: '$($changeLog.Options.Output.GroupBy)')";
 
-            $releases.Count | Should -Be 9;
+            $releases.Count | Should -Be 10;
 
             $releases[0].Tag.Label | Should -Be 'HEAD';
             $releases[0].Partitions['fix'].Count | Should -Be 1;
@@ -1249,10 +1373,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'scope';
             [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            $changeLog.Init();
+
             [array]$releases = $changeLog.composePartitions();
             Write-Debug "=== Built '$($releases.Count)' releases (path: '$($changeLog.Options.Output.GroupBy)')";
 
-            $releases.Count | Should -Be 9;
+            $releases.Count | Should -Be 10;
 
             #
             # ...
@@ -1277,10 +1403,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = [string]::Empty;
             [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            $changeLog.Init();
+
             [array]$releases = $changeLog.composePartitions();
             Write-Debug "=== Built '$($releases.Count)' releases (path: '$($changeLog.Options.Output.GroupBy)')";
 
-            $releases.Count | Should -Be 9;
+            $releases.Count | Should -Be 10;
 
             $releases[0].Tag.Label | Should -Be 'HEAD';
             $releases[0].Partitions['uncategorised'].Count | Should -Be 1;
@@ -1361,12 +1489,13 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
                 $_options.Output.GroupBy = 'scope/type';
 
                 [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
-                [array]$releases = $changeLog.composePartitions();
+                $changeLog.Init();
 
-                [System.Text.StringBuilder]$builder = [System.Text.StringBuilder]::new();
+                [array]$releases = $changeLog.composePartitions();
                 [PSCustomObject]$customWalkInfo = [PSCustomObject]@{
                   PSTypeName = 'Klassy.ChangeLog.WalkInfo';
-                  Builder    = $builder;
+                  #
+                  Appender   = [LineAppender]::new()
                   Options    = $_options;
                 }
 
@@ -1381,29 +1510,55 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 
       Context 'MarkdownChangeLogGenerator.Generate' {
         Context 'given: full history (no tags defined)' {
-          It 'should: generate content' {
+          It 'should: generate content' -Tag 'Current' {
             InModuleScope Elizium.Klassy {
-              $_options.Tags = @{
-                PSTypeName = 'Klassy.ChangeLog.Options.Tags';
-                Until      = '3.0.0';
-              }
               [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              $changeLog.Init();
+
               [array]$releases = $changeLog.composePartitions();
-              [string]$template = $_options.Output.Template;
-              [string]$content = $dependencies.Generator.Generate($releases, $template);
+              [object]$template = $_options.Output.Template;
+              [string]$content = $dependencies.Generator.Generate(
+                $releases, $template, $changeLog.TagsInRangeWithHead
+              );
               $content | Should -Not -BeNullOrEmpty;
-              # Write-Host "$content";
             }
             # rel, template
           }
-        }
+
+          Context 'and: no GroupBy' {
+            It 'should: generate content' {
+              InModuleScope Elizium.Klassy {
+                $_options.Selection.Tags = @{
+                  PSTypeName = 'Klassy.ChangeLog.Options.Selection.Tags';
+                  Until      = '1.0.1';
+                }
+                $_options.Output.GroupBy = [string]::Empty;
+                $_options.Output.Headings.H3 = '*{ungroupedStmt}';
+
+                [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+                $changeLog.Init();
+
+                [array]$releases = $changeLog.composePartitions();
+                [object]$template = $_options.Output.Template;
+                [string]$content = $dependencies.Generator.Generate(
+                  $releases, $template, $changeLog.TagsInRangeWithHead
+                );
+                $content | Should -Not -BeNullOrEmpty;
+              }
+            }
+          } # and: no GroupBy
+        } # given: full history (no tags defined)
       } # MarkdownChangeLogGenerator.Generate
 
       Context 'given: MarkdownChangeLogGenerator.CreateComparisonLinks' {
         It 'should: generate content' {
           InModuleScope Elizium.Klassy {
             [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
-            [string]$content = $dependencies.Generator.CreateComparisonLinks();
+            $changeLog.Init();
+
+            [string]$content = $dependencies.Generator.CreateComparisonLinks(
+              $changeLog.TagsInRangeWithHead
+            );
             $content | Should -Not -BeNullOrEmpty;
           }
         }
@@ -1413,6 +1568,8 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
         It 'should: generate content' {
           InModuleScope Elizium.Klassy {
             [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+            $changeLog.Init();
+
             [string]$content = $dependencies.Generator.CreateDisabledWarnings();
             $content | Should -Not -BeNullOrEmpty;
           }
@@ -1423,14 +1580,19 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 
   Describe 'given: ChangeLog with Git' {
     Context 'and: klassy' {
-      It 'should: Build real change log' -Tag 'Current' {
+      It 'should: Build real change log' {
         InModuleScope Elizium.Klassy {
           [ChangeLog]$changeLog = New-ChangeLog -Options $_options;
+          $_changeLog.Init();
+
           [string]$content = $changeLog.Build();
           $content | Should -Not -BeNullOrEmpty;
 
-          [string]$outputPath = '~\Changelog.klassy.md';
-          Set-Content -LiteralPath $outputPath -Value $content;
+          [string]$outputFile = 'ChangeLog-test.md';
+          [string]$outputPath = Join-Path -Path $TestDrive -ChildPath $outputFile;
+          $changeLog.Save($content, $outputPath);
+
+          Test-Path -LiteralPath $outputPath | Should -BeTrue;
         }
       }
     }
@@ -1443,15 +1605,17 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
           [string]$script:_avatarLink = "<img title='plastikfan' src='https://github.com/plastikfan.png?size=24'>";
           [string]$script:_subject = 'feat(pstools)!: #145 Allow command to be invoked ...';
           [hashtable]$selectors = @{
-            'scope' = 'pstools';
-            'type'  = 'feat';
+            'scope'  = 'pstools';
+            'type'   = 'feat';
+            'change' = 'add';
           }
-          [regex]$includeRegex = [regex]::new($_includes[0]);
+          [regex]$includeRegex = [regex]::new($_includes[1]);
           [System.Text.RegularExpressions.GroupCollection]$groups = `
             $includeRegex.Matches($_subject)[0].Groups;
 
           [PSCustomObject]$script:_commit = [PSCustomObject]@{
             PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+            #
             Date       = [DateTime]::Parse('2021-04-19 16:17:04 +0100');
             CommitId   = 'dc800c6';
             FullHash   = 'dc800c68e4aaa6be692c8254490945ad73f69e6d';
@@ -1473,6 +1637,7 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             'commitid-link' = $("[dc800c6](https://github.com/EliziumNet/Loopz/" +
               "commit/dc800c68e4aaa6be692c8254490945ad73f69e6d)");
             'is-breaking'   = $_commit.Info.IsBreaking;
+            'is-squashed'   = $true;
             'issue-link'    = "[#145](https://github.com/EliziumNet/Loopz/issues/145)";
             'subject'       = $_subject;
             'scope'         = 'pstools';
@@ -1485,17 +1650,24 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
         Context 'and: Statement <statement>' {
           It 'should: fully resolve to be "<expected>"' -TestCases @(
             @{
-              Statement = 'AUTHOR: *{authorStmt}';
+              Statement = 'AUTHOR:*{authorStmt}';
               Expected  = $(
-                "AUTHOR:  by ``@plastikfan`` " +
+                "AUTHOR: by ``@plastikfan`` :bird:"
+              )
+            },
+
+            @{
+              Statement = 'AVATAR:*{avatarStmt}';
+              Expected  = $(
+                "AVATAR: by ``@plastikfan`` " +
                 "<img title='plastikfan' src='https://github.com/plastikfan.png?size=24'>"
               )
             },
 
             @{
-              Statement = '?{breakStmt}';
+              Statement = '?{is-breaking;breakStmt}';
               Expected  = ':warning: *BREAKING CHANGE* ';
-            },
+            }
 
             @{
               Statement = '[Change Type: &{_C}+{change}] => ';
@@ -1503,12 +1675,12 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             },
 
             @{
-              Statement = '?{changeStmt}';
+              Statement = '?{change;changeStmt}';
               Expected  = [string]::Empty
-            }
+            },
 
             @{
-              Statement = '+ ?{breakStmt}*{changeStmt}*{subjectStmt}*{authorStmt}';
+              Statement = '+ ?{break;breakStmt}*{changeStmt}*{subjectStmt}*{avatarStmt}';
               Expected  = $(
                 "+ " +
                 ":warning: *BREAKING CHANGE* " +
@@ -1517,10 +1689,10 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
                 " by ``@plastikfan`` " +
                 "<img title='plastikfan' src='https://github.com/plastikfan.png?size=24'>"
               );
-            }
+            },
 
             @{
-              Statement = '+ ?{breakStmt}?{changeStmt}*{subjectStmt}*{authorStmt}';
+              Statement = '+ ?{break;breakStmt}?{change;changeStmt}*{subjectStmt}*{avatarStmt}';
               Expected  = $(
                 "+ " +
                 ":warning: *BREAKING CHANGE* " +
@@ -1548,7 +1720,7 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             },
 
             @{
-              Statement = '?{squashedStmt}';
+              Statement = '?{is-squashed;squashedStmt}';
               Expected  = 'SQUASHED: ';
             },
 
@@ -1563,15 +1735,20 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             },
 
             @{
+              Statement = 'BODY: ^{body}';
+              Expected  = 'BODY: Allow command to be invoked ...';
+            },
+
+            @{
               Statement = 'META INFO:*{metaStmt}';
               Expected  = $(
                 'META INFO: (Id: [dc800c6](https://github.com/EliziumNet/Loopz/commit/dc800c68e4aaa6be692c8254490945ad73f69e6d))' +
                 ' \<[#145](https://github.com/EliziumNet/Loopz/issues/145)\>'
               );
-            }
+            },
 
             @{
-              Statement = '?{metaStmt}';
+              Statement = '*{metaStmt}';
               Expected  = $(
                 ' (Id: [dc800c6](https://github.com/EliziumNet/Loopz/commit/dc800c68e4aaa6be692c8254490945ad73f69e6d))' +
                 ' \<[#145](https://github.com/EliziumNet/Loopz/issues/145)\>'
@@ -1579,12 +1756,16 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             },
 
             @{
-              Statement = '?{issueLinkStmt}';
+              Statement = '?{issue-link;issueLinkStmt}';
               Expected  = $(
                 ' \<[#145](https://github.com/EliziumNet/Loopz/issues/145)\>'
               );
-            }
+            },
 
+            @{
+              Statement = '?{no-such-variable;issueLinkStmt}';
+              Expected  = [string]::Empty;
+            }
           ) {
             InModuleScope Elizium.Klassy -Parameters @{ Statement = $statement; Expected = $expected } {
               [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
@@ -1592,7 +1773,9 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
                 [string]$statement,
                 [string]$expected
               )
-              $null, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              $changeLog.Init();
+
               $_variables['avatar-img'] = $dependencies.Generator._utils.AvatarImg($_commit.Author);
 
               [string]$result = $dependencies.Generator._utils.Evaluate(
@@ -1626,7 +1809,7 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
             },
 
             @{
-              Statement = '?{blooperStmt}';
+              Statement = '?{is-breaking;blooperStmt}';
               Because   = "'blooperStmt' is not a defined conditional statement";
             },
 
@@ -1645,7 +1828,8 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
                 [string]$statement,
                 [string]$because
               )
-              $null, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              $changeLog.Init();
 
               $_variables['avatar-img'] = $dependencies.Generator._utils.AvatarImg($_commit.Author);
 
@@ -1667,7 +1851,8 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
                 Break      = '*{breakStmt} *BREAKING CHANGE* ';
               }
               [string]$statement = $_options.Output.Statements.Break;
-              $null, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              $changeLog.Init();
 
               {
                 $dependencies.Generator._utils.Evaluate(
@@ -1684,10 +1869,11 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
               $_options.Output.Statements = [PSCustomObject]@{
                 PSTypeName = 'Klassy.ChangeLog.Options.Output.Statements';
                 #
-                Break      = '?{breakStmt} *BREAKING CHANGE* ';
+                Break      = '?{is-breaking;breakStmt} *BREAKING CHANGE* ';
               }
               [string]$statement = $_options.Output.Statements.Break;
-              $null, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              $changeLog.Init();
 
               {
                 $dependencies.Generator._utils.Evaluate(
@@ -1700,4 +1886,85 @@ Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
       } # given: config error
     } # Evaluate
   } # GeneratorUtils
+
+  Describe 'ChangeLogOptionsManager' {
+    Context 'given: requested <name> options does exist' {
+      It 'should: create new options' -TestCases @(
+        @{ Name = 'Alpha' },
+        @{ Name = 'Elizium' },
+        @{ Name = 'Zen' },
+        @{ Name = 'Unicorn' }
+      ) {
+        InModuleScope Elizium.Klassy -Parameters @{ Name = $name; } {
+          param(
+            [string]$Name
+          )
+          [string]$root = 'root';
+          [string]$rootPath = Join-Path -Path $TestDrive -ChildPath $root;
+          [PSCustomObject]$optionsInfo = [PSCustomObject]@{
+            Base          = '-changelog.options';
+            DirectoryName = [ChangeLogSchema]::DIRECTORY;
+            GroupBy       = 'scope/type/change/break';
+            Root          = $rootPath;
+          }
+
+          [ChangeLogOptionsManager]$manager = New-ChangeLogOptionsManager -OptionsInfo $optionsInfo;
+          [boolean]$withEmoji = $true;
+
+          [PSCustomObject]$options = $manager.FindOptions($Name, $withEmoji);
+          $manager.Found | Should -BeFalse;
+          $options | Should -Not -BeNullOrEmpty;
+
+          [ChangeLog]$changeLog = New-ChangeLog -Options $options;
+          $changeLog.Build() | Should -Not -BeNullOrEmpty;
+        }
+      }
+    }
+
+    Context 'given: requested options exist' {
+      It 'should: load existing options and build' {
+        InModuleScope Elizium.Klassy {
+          [string]$directoryName = [ChangeLogSchema]::DIRECTORY;
+          [string]$root = 'root';
+          [string]$rootPath = Join-Path -Path $TestDrive -ChildPath $root;
+          [PSCustomObject]$optionsInfo = [PSCustomObject]@{
+            Base          = '-changelog.options';
+            DirectoryName = $directoryName;
+            GroupBy       = 'scope/type/change/break';
+            Root          = $rootPath;
+          }
+          [string]$directoryPath = Join-Path -Path $rootPath -ChildPath $directoryName;
+          [string]$optionsFileName = 'Test-emoji-changelog.options.json';
+          [string]$testPath = "./Tests/Data/changelog/$optionsFileName";
+
+          [void]$(New-Item -ItemType 'Directory' -Path $directoryPath);
+          [string]$destinationPath = Join-Path -Path $directoryPath -ChildPath $optionsFileName;
+          Copy-Item -LiteralPath $testPath -Destination $destinationPath;
+
+          [ChangeLogOptionsManager]$manager = New-ChangeLogOptionsManager -OptionsInfo $optionsInfo;
+          [boolean]$withEmoji = $true;
+
+          [PSCustomObject]$options = $manager.FindOptions('Test', $withEmoji);
+          $manager.Found | Should -BeTrue;
+          $options | Should -Not -BeNullOrEmpty;
+
+          [ChangeLog]$changeLog = New-ChangeLog -Options $options;
+          $changeLog.Build() | Should -Not -BeNullOrEmpty; ;
+        }
+      }
+    }
+
+    Context 'given: json-schema' {
+      It 'should: validate options ok' {
+        InModuleScope Elizium.Klassy {
+          [string]$optionsFileName = 'Test-emoji-changelog.options.json';
+          [string]$testPath = "./Tests/Data/changelog/$($optionsFileName)";
+          [string]$schemaFileName = [ChangeLogSchema]::OPTIONS_SCHEMA_FILENAME;
+          [string]$schemaPath = "./FileList/$($schemaFileName)";
+          [string]$json = Get-Content -LiteralPath $testPath;
+          $null = Test-Json -Json $json -SchemaFile $schemaPath;
+        }
+      }
+    }
+  } # ChangeLogOptionsManager
 } # ChangeLog

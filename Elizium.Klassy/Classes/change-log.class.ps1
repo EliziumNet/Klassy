@@ -231,7 +231,11 @@ class Git : SourceControl {
   } # ReadGitCommitsInRange
 
   [string] ReadRemoteUrl() {
-    return (git remote get-url origin) -replace '\.git$';
+    [string]$url = (git remote get-url origin) -replace '\.git$';
+    if ($url.EndsWith('/')) {
+      $url = $url.Substring(0, $($url.Length - 1));
+    }
+    return $url
   }
 
   [string] ReadRootPath() {
@@ -245,6 +249,9 @@ class ChangeLog {
   [PSCustomObject]$Options;
   [SourceControl]$SourceControl;
   [boolean]$IsDescending;
+  [PSCustomObject[]]$TagsInRangeWithHead;
+  [PSCustomObject[]]$AllTagsWithHead;
+
   hidden [regex]$_squashRegex;
   hidden [GroupBy]$_grouper;
   hidden [ChangeLogGenerator]$_generator;
@@ -259,13 +266,12 @@ class ChangeLog {
     $this._grouper = $grouper;
     $this._generator = $generator;
 
-    $this.IsDescending = -not(($this.Options.Selection)?.Order -and
-      (($this.Options.Selection)?.Order -eq 'asc'));
+    $this.IsDescending = $true;
     $this._grouper.SetDescending($this.IsDescending);
     $this._generator.SetDescending($this.IsDescending);
 
     $this._squashRegex = if (($this.Options.Selection)?.SquashBy `
-        -and -not([string]::IsNullOrEmpty($this.Options.Selection.SquashBy))) {
+        -and -not([string]::IsNullOrEmpty($this.Options.Selection?.SquashBy))) {
       [regex]::new($this.Options.Selection.SquashBy);
     }
     else {
@@ -275,33 +281,104 @@ class ChangeLog {
     $sourceControl.Init($this.IsDescending);
   } # ctor.ChangeLog
 
+  [void] Init() {
+    $this.AllTagsWithHead = $this.SourceControl.GetSortedTags($true);
+    $this.TagsInRangeWithHead = $this.GetTagsInRange();
+
+    if (($this.Options.Selection.Tags)?.From) {
+      if (-not($this.TagIsValid($this.Options.Selection.Tags.From))) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLog.Init: From tag '$($this.Options.Selection.Tags.From)'" +
+            " does not exist in this repo"
+          )
+        );
+      }
+    }
+
+    if (($this.Options.Selection.Tags)?.Until) {
+      if (-not($this.TagIsValid($this.Options.Selection.Tags.Until))) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLog.Init: Until tag '$($this.Options.Selection.Tags.Until)'" +
+            " does not exist in this repo"
+          )
+        );
+      }
+    }
+
+    if (($this.Options.Selection.Tags)?.From -and ($this.Options.Selection.Tags)?.Until) {
+      if (-not($this.TagRangeIsValid(
+            $this.Options.Selection.Tags.From, $this.Options.Selection.Tags.Until
+          ))) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLog.Init: From tag: '$($this.Options.Selection.Tags.From)'" +
+            " and Until tag: '$($this.Options.Selection.Tags.Until)'" +
+            " have been specified the wrong way round. Swap the values and try again."
+          )
+        );
+      }
+    }
+  }
+
+  [boolean] TagIsValid([string]$label) {
+    $found = $this.AllTagsWithHead | Where-Object {
+      $_.Label -eq $label;
+    }
+
+    if (($this.Options.Selection.Tags)?.Unreleased) {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $("ChangeLog.Init: From tag 'Unreleased' can not be specified with '$label'")
+      );
+    }
+
+    return ($null -ne $found);
+  }
+
+  [boolean] TagRangeIsValid([string]$fromLabel, [string]$untilLabel) {
+    [PSCustomObject]$fromTag = $($this.AllTagsWithHead | Where-Object {
+        $_.Label -eq $fromLabel;
+      })?[0];
+
+    [PSCustomObject]$untilTag = $($this.AllTagsWithHead | Where-Object {
+        $_.Label -eq $untilLabel;
+      })?[0];
+
+    return [DateTime]::Compare($fromTag.Date, $untilTag.Date) -lt 0;
+  }
+
   [string] Build() {
     [array]$releases = $this.composePartitions();
-    [string]$template = $this.Options.Output.Template;
-    [string]$content = $this._generator.Generate($releases, $template);
+    [object]$template = $this.Options.Output.Template;
+    [string]$content = $this._generator.Generate(
+      $releases, $template, $this.TagsInRangeWithHead
+    );
 
     return $content;
+  }
+
+  [void] Save([string]$content, [string]$fullPath) {
+    Set-Content -LiteralPath $fullPath -Value $content;
   }
 
   # Return: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')][array]
   #
   [PSCustomObject[]] composePartitions() {
-
     [hashtable]$releases = $this.processCommits();
-    [PSCustomObject[]]$allTags = $this.SourceControl.GetSortedTags($true);
 
-    return $this._grouper.Partition($releases, $allTags);
+    return $this._grouper.Partition($releases, $this.AllTagsWithHead);
   }
 
   # Returns: ('Klassy.ChangeLog.CommitInfo')[]
   #
-  [PSCustomObject[]] GetTagsInRange([boolean]$includeHead) {
-    [PSCustomObject[]]$allTags = $this.SourceControl.GetSortedTags($includeHead);
+  [PSCustomObject[]] GetTagsInRange() {
+    [scriptblock]$whereTagsInRange = if (($this.Options.Selection.Tags)?.From -and
+      ($this.Options.Selection.Tags)?.Until) {
 
-    [scriptblock]$whereTagsInRange = if (($this.Options.Tags)?.From -and ($this.Options.Tags)?.Until) {
       [scriptblock] {
-        [string]$from = ($this.Options.Tags)?.From;
-        [string]$until = ($this.Options.Tags)?.Until;
+        [string]$from = ($this.Options.Selection.Tags)?.From;
+        [string]$until = ($this.Options.Selection.Tags)?.Until;
 
         [DateTime]$fromDate = $this.SourceControl.GetTagDate($from);
         [DateTime]$untilDate = $this.SourceControl.GetTagDate($until);
@@ -310,28 +387,28 @@ class ChangeLog {
           : $_.Date -le $fromDate -and $_.Date -ge $untilDate;
       }
     }
-    elseif (($this.Options.Tags)?.From) {
+    elseif (($this.Options.Selection.Tags)?.From) {
       [scriptblock] {
-        [string]$from = ($this.Options.Tags)?.From;
+        [string]$from = ($this.Options.Selection.Tags)?.From;
         [DateTime]$fromDate = $this.SourceControl.GetTagDate($from);
 
         $this.IsDescending ? $_.Date -ge $fromDate : $_.Date -le $fromDate;
       }
     }
-    elseif (($this.Options.Tags)?.Until) {
+    elseif (($this.Options.Selection.Tags)?.Until) {
       [scriptblock] {
-        [string]$until = ($this.Options.Tags)?.Until;
+        [string]$until = ($this.Options.Selection.Tags)?.Until;
         [DateTime]$untilDate = $this.SourceControl.GetTagDate($until);
 
         $this.IsDescending ? $_.Date -le $untilDate : $_.Date -ge $untilDate;
       }
     }
-    elseif (($this.Options.Tags)?.Unreleased) {
+    elseif (($this.Options.Selection.Tags)?.Unreleased) {
       [scriptblock] {
         [DateTime]$lastDate = $this.SourceControl.GetLastReleaseDate();
 
         if ($lastDate) {
-          $this.IsDescending ? $_.Date -ge $lastDate : $_.Date -le $lastDate;
+          $this.IsDescending ? $_.Date -gt $lastDate : $_.Date -le $lastDate;
         }
         else {
           # There are no releases but there are commits, we should still be able
@@ -344,7 +421,7 @@ class ChangeLog {
     else {
       [scriptblock] { $true } # => Select all tags by default
     }
-    [PSCustomObject[]]$result = ($allTags | Where-Object $whereTagsInRange);
+    [PSCustomObject[]]$result = ($this.AllTagsWithHead | Where-Object $whereTagsInRange);
 
     return $result;
   } # GetTagsInRange
@@ -352,7 +429,6 @@ class ChangeLog {
   # Returned releases are a hashtable keyed by tag label => [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
   #
   [hashtable] processCommits() {
-    [PSCustomObject[]]$tags = $this.GetTagsInRange($false);
 
     # NB: WARNING, do not select the body; if it is multiline, then it will break
     # all of this, because the assumption is that 1 commit = 1 line of content
@@ -361,54 +437,91 @@ class ChangeLog {
     [string[]]$header = @("Date", "CommitId", "Author", "Subject");
     [string]$delim = "`t";
 
-    [boolean]$untilMissing = -not(($this.Options.Tags)?.Until);
-    [string]$until = if (($this.Options.Tags)?.Unreleased -or ($untilMissing)) {
-      'HEAD';
-    }
-    elseif (-not($untilMissing)) {
-      ($this.Options.Tags)?.Until;
-    }
-
     [hashtable]$releases = [ordered]@{}
     
-    Write-Debug "========= [ processCommits: tags ($($tags.Count)): '$($tags.Label -join ', ')' ] ====";
+    Write-Debug "=== [ processCommits: tags ($($this.TagsInRangeWithHead.Count)): '$($this.TagsInRangeWithHead.Label -join ', ')' ] ===";
 
-    foreach ($tagInfo in $tags) {
-      [string]$from = $tagInfo.Label;
-      [string]$range = "$from..$until";
+    foreach ($tagInfo in $this.TagsInRangeWithHead) {
+      [string]$until = $tagInfo.Label; 
+      [PSCustomObject]$rangeInfo = $this.getRange($tagInfo, $this.AllTagsWithHead);
 
-      if ($from -ne $until) {
-        # Attach an auxiliary Info field for later use
-        #
-        [array]$inRange = $this.SourceControl.ReadGitCommitsInRange(
-          $format, $range, $header, $delim
-        ) | ForEach-Object {
-          Add-Member -InputObject $_ -NotePropertyName 'Info' -NotePropertyValue $null -PassThru;
-        };
+      # Attach an auxiliary Info field for later use
+      #
+      [array]$inRange = $this.SourceControl.ReadGitCommitsInRange(
+        $format, $rangeInfo.Range, $header, $delim
+      ) | ForEach-Object {
+        Add-Member -InputObject $_ -NotePropertyName 'Info' -NotePropertyValue $null -PassThru;
+      };
 
-        foreach ($com in $inRange) {
-          [string]$displayDate = $com.Date.ToString('yyyy-MM-dd - HH:mm:ss');
-          Write-Debug "    ---> FROM: '$from', UNTIL: '$until' PRE-FILTERED COUNT: '$($inRange.Count)' <---";
-          Write-Debug "      + '$($com.Subject)', DATE: '$($displayDate)'";
-          Write-Debug "    --------------------------";
-          Write-Debug "";
-        }
-
-        [PSCustomObject]$squashed = $this.filterAndSquashCommits($inRange, $until);
-
-        if ($squashed) {
-          $releases[$until] = $squashed;
-        }
-      }
-      else {
-        Write-Debug "    ---> SKIPPING: FROM: '$from', UNTIL: '$until' <---";
-      }
-
-      $until = $from; 
+      $this.handleTagsInRange($releases, $until, $inRange);
     }
 
     return $releases;
   } # processCommits
+
+  # $current is until and $from is synthetically set to the previous tag in sequence
+  # tags in range eg:
+  # |<-- most recent                                         oldest -->|
+  #     0,     1,     2,     3,     4,     5,     6,     7,     8,     9
+  #  HEAD, 3.0.2, 3.0.1, 3.0.0, 2.0.0, 1.2.0, 1.1.1, 1.1.0, 1.0.1, 1.0.0
+  #                       curr,  from
+  #
+  # ASSUMPTION: descending
+  #
+  [PSCustomObject] getRange ([PSCustomObject]$current, [PSCustomObject[]]$allTags) {
+    [System.Predicate[PSCustomObject]]$predicate = [System.Predicate[PSCustomObject]] {
+      param(
+        [PSCustomObject]$item
+      )
+      $item.Label -eq $current.Label;
+    }
+    [int]$index = [Array]::FindIndex($allTags, $predicate);
+    [boolean]$isOldest = $index -eq ($allTags.Count - 1);
+    
+    [PSCustomObject]$result = if ($current.Label -eq 'HEAD') {
+      [string]$latest = $allTags[1].Label;
+
+      [PSCustomObject]@{
+        Range = "$($latest)..HEAD";
+        From  = $latest;
+        Until = 'HEAD';
+      }
+    }
+    elseif ($isOldest) {
+      [PSCustomObject]@{
+        Range = $current.Label;
+        From  = [string]::Empty;
+        Until = $current.Label;
+      }
+    }
+    else {
+      [string]$from = $allTags[$index + 1].Label;
+
+      [PSCustomObject]@{
+        Range = "$($from)..$($current.Label)";
+        From  = $from;
+        Until = $current.Label;
+      }
+    }
+
+    return $result;
+  }
+
+  [void] handleTagsInRange ([hashtable]$releases, [string]$until, [array]$inRange) {
+    foreach ($com in $inRange) {
+      [string]$displayDate = $com.Date.ToString('yyyy-MM-dd - HH:mm:ss');
+      Write-Debug "    ---> Label: '$until' PRE-FILTERED COUNT: '$($inRange.Count)' <---";
+      Write-Debug "      + '$($com.Subject)', DATE: '$($displayDate)'";
+      Write-Debug "    --------------------------";
+      Write-Debug "";
+    }
+
+    [PSCustomObject]$squashed = $this.filterAndSquashCommits($inRange, $until);
+
+    if ($squashed) {
+      $releases[$until] = $squashed;
+    }
+  }
 
   # Filter and squash commits for a single release denoted by the Until label.
   # Returns a PSCustomObject instance with members:
@@ -491,7 +604,7 @@ class ChangeLog {
     if ($noSquashed -and $noCommits) {
       # No commits for release
       #
-      $result = @{
+      $result = [PSCustomObject]@{
         PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
         Dirty      = $commitsInRange;
         Label      = $untilLabel;
@@ -583,7 +696,7 @@ class GroupByImpl : GroupBy {
   GroupByImpl([PSCustomObject]$options) {
     $this.Options = $options;
     $this._segments = -not([string]::IsNullOrEmpty($this.Options.Output.GroupBy)) ? `
-      $this.Options.Output.GroupBy -split '/' : @();
+      $this.Options.Output.GroupBy -split '/' : @('ungrouped');
 
     $this._leafSegment = ($this._segments.Count -gt 0) ? $this._segments[-1] : [string]::Empty;
   } # ctor
@@ -660,7 +773,7 @@ class GroupByImpl : GroupBy {
           [string]$headingNumeral = $("H$($current + 3)");
 
           $segmentInfo.ActiveSegment = $this._segments[$current];
-          $segmentInfo.ActiveLeg = $leg;
+          $segmentInfo.ActiveLeg = [string]::IsNullOrWhiteSpace($leg) ? $this._uncategorised : $leg;
           $handlers.OnHeading(
             $headingNumeral, $this.Options.Output.Headings.$headingNumeral,
             $segmentInfo, $tagInfo, $handlers.Utils, $custom
@@ -758,8 +871,10 @@ class GroupByImpl : GroupBy {
 
       [PSCustomObject]$segmentInfo = [PSCustomObject]@{
         PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
+        #
         Path          = [string]::Empty;
         DecoratedPath = [string]::Empty;
+        IsDirty       = $false;
       }
       $handlers.OnEndBucket($segmentInfo, $tagInfo, $handlers.Utils, $custom);
     }
@@ -767,6 +882,7 @@ class GroupByImpl : GroupBy {
     if (($cleanCount -eq 0) -and $partitions.ContainsKey($this._dirty)) {
       [PSCustomObject]$segmentInfo = [PSCustomObject]@{
         PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
+        #
         Path          = [string]::Empty;
         DecoratedPath = [string]::Empty;
         IsDirty       = $true;
@@ -778,7 +894,7 @@ class GroupByImpl : GroupBy {
 
       [PSCustomObject]$dirtyCommit = $partitions[$this._dirty][0];
       $handlers.OnCommit(
-        $this._dirty, $dirtyCommit, $tagInfo, $handlers.Utils, $custom
+        $segmentInfo, $dirtyCommit, $tagInfo, $handlers.Utils, $custom
       );
 
       $handlers.OnEndBucket(
@@ -787,6 +903,52 @@ class GroupByImpl : GroupBy {
     }
   } # Walk
 
+  [PSCustomObject] composeIsaLookup([string]$name, [hashtable]$lookup) {
+    [regex]$isaRegex = [regex]::new('^isa\:(?<parent>[\w\-]+)$');
+
+    [string[]]$keys = $lookup.Keys;
+    [string[]]$values = $(
+      $keys | Where-Object {
+        ($_ -ne '?') -and -not($isaRegex.IsMatch($lookup[$_])) } | ForEach-Object {
+        $_.ToLower();
+      }
+    );
+
+    [hashtable]$overrides = @{};
+    $keys | Where-Object { $isaRegex.IsMatch($lookup[$_]) } | ForEach-Object {
+      [string]$isa = $lookup[$_];
+      [System.Text.RegularExpressions.Match]$m = $isaRegex.Matches($isa)[0];
+      [string]$parent = $m.Groups['parent'].Success ? $m.Groups['parent'].Value.Trim() : '';
+
+      if (-not($values -contains $parent)) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "GroupByImpl.composeIsaLookup: found invalid isa entry: '$_'" +
+            ", '$parent' does not exist in '$name'."
+          )
+        );
+      }
+
+      if ($_ -eq 'isa') {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "GroupByImpl.composeIsaLookup: found invalid isa entry: '$_'" +
+            ", refers to itself in '$name'."
+          )
+        );
+      }
+      $overrides[$_] = $parent;
+    }
+
+    [PSCustomObject]$result = [PSCustomObject]@{
+      PSTypeName = 'Klassy.ChangeLog.IsaLookup';
+      #
+      Values     = $values;
+      Overrides  = $overrides;
+    }
+
+    return $result;
+  } 
   # To generate the output, we need the releases to be in descending order of
   # the date, but of course, we need to be able to identify each release. Building
   # a hash of release tag to the release collection will not guarantee the order
@@ -805,16 +967,20 @@ class GroupByImpl : GroupBy {
 
     [regex]$changeRegex = if ($this.Options.Selection.Subject?.Change -and
       -not([string]::IsNullOrEmpty($this.Options.Selection.Subject.Change))) {
-        [regex]::new($this.Options.Selection.Subject.Change);
+      [regex]::new($this.Options.Selection.Subject.Change);
     }
     else {
       $null;
     }
-    [string[]]$changeTypes = $(
-      $this.Options.Output.Lookup.ChangeTypes.Keys | Where-Object {
-        $_ -ne '?' } | ForEach-Object {
-          $_.ToLower();
-        }
+
+    [PSCustomObject]$changeTypes = $this.composeIsaLookup(
+      'ChangeTypes', $this.Options.Output.Lookup.ChangeTypes
+    );
+    [PSCustomObject]$scopes = $this.composeIsaLookup(
+      'Scopes', $this.Options.Output.Lookup.Scopes
+    );
+    [PSCustomObject]$types = $this.composeIsaLookup(
+      'Types', $this.Options.Output.Lookup.Types
     );
 
     foreach ($tag in $sortedTags) {
@@ -847,19 +1013,29 @@ class GroupByImpl : GroupBy {
             [System.Text.RegularExpressions.MatchCollection]$mc = $partitionRegex.Matches($com.Subject);
             [System.Text.RegularExpressions.GroupCollection]$groups = $mc[0].Groups;
 
-            [ChangeLogSchema]::SEGMENTS | ForEach-Object {
+            [ChangeLogSchema]::GetSegments($this._segments) | ForEach-Object {
               if ($groups.ContainsKey($_) ) {
-                $selectors[$_] = $groups[$_];
-
                 # Exception override for break, the '!' is not a very useful
                 # value, so translate to something more explicit.
                 #
                 $selectors[$_] = if ($_ -eq 'break') {
-                  [string]::IsNullOrEmpty($groups[$_]) ? `
+                  ([string]::IsNullOrEmpty($groups[$_]) -and -not($groups[$_].Success)) ? `
                     [ChangeLogSchema]::NON_BREAKING : [ChangeLogSchema]::BREAKING;
                 }
+                elseif ($_ -eq 'scope') {
+                  [string]$scope = $groups[$_].Value;
+                  $scopes.Overrides.ContainsKey($scope) ? $scopes.Overrides[$scope] : $scope;
+
+                  if ([string]::IsNullOrEmpty($scope)) {
+                    $scope = $this._uncategorised;
+                  }
+                }
+                elseif ($_ -eq 'type') {
+                  [string]$type = $groups[$_].Value;
+                  $types.Overrides.ContainsKey($type) ? $types.Overrides[$type] : $type;
+                }
                 else {
-                  $groups[$_];
+                  $groups[$_].Value;
                 }
               }
             }
@@ -871,8 +1047,9 @@ class GroupByImpl : GroupBy {
                 if ($changeRegex.IsMatch($body)) {
                   [string]$change = $changeRegex.Matches($body)[0].Value.Trim().ToLower();
 
-                  if ($changeTypes -contains $change) {
-                    $selectors['change'] = $change;
+                  if ($changeTypes.Values -contains $change) {
+                    $selectors['change'] = $changeTypes.Overrides.ContainsKey($change) ? `
+                      $changeTypes.Overrides[$change] : $change;
                   }
                 }
               }
@@ -932,7 +1109,7 @@ class GroupByImpl : GroupBy {
         # that when $paths is added to, commits may be multiple counted, because the same path
         # within a release could be added more than once.
         #
-        $paths = $($paths | Get-Unique);
+        $paths = $($paths | Sort-Object | Get-Unique);
 
         $partitionItem = [PSCustomObject]@{
           PSTypeName = 'Klassy.ChangeLog.PartitionedRelease';
@@ -999,7 +1176,6 @@ class GroupByImpl : GroupBy {
   [PSCustomObject[]] SortReleasesByDate([hashtable]$releases, [PSCustomObject[]]$sortedTags) {
 
     [PSCustomObject[]]$sorted = foreach ($tagInfo in $sortedTags) {
-
       if ($releases.ContainsKey($tagInfo.Label)) {
         $releases[$tagInfo.Label]
       }
@@ -1047,7 +1223,7 @@ class ChangeLogGenerator {
       'Abstract method not implemented (ChangeLogGenerator.SetDescending)');
   }
 
-  [string] Generate([PSCustomObject[]]$releases) {
+  [string] Generate([PSCustomObject[]]$releases, [object]$template, [PSCustomObject[]]$tagsInRange) {
     throw [System.Management.Automation.MethodInvocationException]::new(
       'Abstract method not implemented (ChangeLogGenerator.Generate)');
   }
@@ -1075,8 +1251,8 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     $this.IsDescending = $value;
   }
 
-  [string] Generate([PSCustomObject[]]$releases, [string]$template) {
-    [System.Text.StringBuilder]$builder = [System.Text.StringBuilder]::new();
+  [string] Generate([PSCustomObject[]]$releases, [object]$template, [PSCustomObject[]]$tagsInRange) {
+    [LineAppender]$appender = [LineAppender]::new();
 
     [scriptblock]$OnCommit = {
       param(
@@ -1087,11 +1263,13 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
         [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
       )
       [PSCustomObject]$output = $custom.Options.Output;
-      [string]$commitStmt = $output.Statements.Commit;
+
+      [string]$commitStmt = $segmentInfo.IsDirty ? $output.Statements.DirtyCommit: $output.Statements.Commit;
       [hashtable]$commitVariables = $utils.GetCommitVariables($commit, $tagInfo);
       [string]$commitLine = $utils.Evaluate($commitStmt, $commit, $commitVariables);
+      $commitLine = $utils.SpacesRegex.Replace($commitLine, ' ');
 
-      [void]$custom.Builder.AppendLine($commitLine);
+      $custom.Appender.AppendLine($commitLine);
     } # OnCommit
 
     [scriptblock]$OnEndBucket = {
@@ -1104,8 +1282,8 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
       [PSCustomObject]$output = $custom.Options.Output;
 
       if (${output}?.Literals.BucketEnd -and -not([string]::IsNullOrEmpty($output.Literals.BucketEnd))) {
-        [void]$custom.Builder.AppendLine([string]::Empty);
-        [void]$custom.Builder.AppendLine($output.Literals.BucketEnd);
+        $custom.Appender.AppendLine([string]::Empty);
+        $custom.Appender.AppendLine($output.Literals.BucketEnd);
       }
     } # OnEndBucket
 
@@ -1122,17 +1300,22 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
       if (-not($headingStmt.StartsWith($prefix))) {
         $headingStmt = $prefix + $headingStmt;
       }
-
       [hashtable]$headingVariables = $utils.GetHeadingVariables($segmentInfo, $tagInfo);
-      [PSCustomObject]$commit = $null;
-      [string]$headingLine = $utils.Evaluate($headingStmt, $commit, $headingVariables);
 
-      [void]$custom.Builder.AppendLine($headingLine);
-      [void]$custom.Builder.AppendLine([string]::Empty);
+      [PSCustomObject]$commit = $null;
+      [string]$headingLine = $utils.Evaluate($headingStmt, $commit, $headingVariables).Trim();
+      $headingLine = $utils.SpacesRegex.Replace($headingLine, ' ');
+
+      Write-Debug "--> Heading('$headingType'): Eval: '$headingLine', Scope: '$($headingVariables['scope'])'";
+
+      $custom.Appender.AppendLine([string]::Empty);
+      $custom.Appender.AppendLine($headingLine);
+      $custom.Appender.AppendLine([string]::Empty);
     } # OnHeading
 
     [PSCustomObject]$handlers = [PSCustomObject]@{
       PSTypeName = 'Klassy.ChangeLog.Handlers';
+      #
       Utils      = $this._utils;
     }
 
@@ -1148,58 +1331,58 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
       $OnEndBucket
     );
 
-    [string]$releaseFormat = $this.Options.Output.Headings.H2;
+    [string]$releaseStmt = $this.Options.Output.Headings.H2;
 
-    if (-not($releaseFormat.StartsWith('## '))) {
-      $releaseFormat = '## ' + $releaseFormat;
+    if (-not($releaseStmt.StartsWith('## '))) {
+      $releaseStmt = '## ' + $releaseStmt;
     }
+
+    [PSCustomObject]$customWalkInfo = [PSCustomObject]@{
+      PSTypeName = 'Klassy.ChangeLog.WalkInfo';
+      #
+      Appender   = $appender;
+      Options    = $this.Options;
+    }
+    $nullSegmentInfo = $null;
 
     foreach ($release in $releases) {
-      [string]$displayDate = $release.Tag.Date.ToString($this.Options.Output.Literals.DateFormat);
-      [string]$displayTag = [GeneratorUtils]::TagDisplayName($release.Tag.Label);
-      [string]$link = "[$($displayTag)]";
-
-      [string]$releaseLine = $releaseFormat.Replace(
-        [GeneratorUtils]::VariableSnippet('link'), $link).Replace(
-        [GeneratorUtils]::VariableSnippet('tag'), $release.Tag.Label).Replace(
-        [GeneratorUtils]::VariableSnippet('display-tag'), $displayTag).Replace(
-        [GeneratorUtils]::VariableSnippet('date'), $displayDate
+      $handlers.OnHeading(
+        'H2', $this.Options.Output.Headings.H2,
+        $nullSegmentInfo, $release.Tag, $handlers.Utils, $customWalkInfo
       );
-      [void]$builder.AppendLine([string]::Empty);
-      [void]$builder.AppendLine($releaseLine);
-      [void]$builder.AppendLine([string]::Empty);
 
-      [PSCustomObject]$customWalkInfo = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.WalkInfo';
-        Builder    = $builder;
-        Options    = $this.Options;
-      }
       $this._grouper.Walk($release, $handlers, $customWalkInfo);
     }
-    [string]$linksContent = $this.CreateComparisonLinks();
-    [string]$warningsContent = $this.CreateDisabledWarnings();
 
-    [string]$markdown = $template.Replace(
-      '[[links]]', $linksContent
-    ).Replace(
-      '[[warnings]]', $warningsContent
-    ).Replace(
-      '[[content]]', $builder.ToString()
+    [PSCustomObject[]]$linkTags = $this._utils.GetLinkTags(
+      $tagsInRange, $this._sourceControl._allTagsWithoutHead
     );
+    [string]$linksContent = $this.CreateComparisonLinks($linkTags);
+    [string]$warningsContent = $this.CreateDisabledWarnings();
+    [string]$schemaVersionContent = $this.CreateSchemaVersion();
+
+    [array]$constituents = @(
+      @{ Name = 'links'; Content = $linksContent },
+      @{ Name = 'schema-version'; Content = $schemaVersionContent },
+      @{ Name = 'warnings'; Content = $warningsContent },
+      @{ Name = 'content'; Content = $appender.ToString() }
+    )
+    [string]$markdown = $template;
+    foreach ($const in $constituents) {
+      $markdown = $markdown.replace(
+        $([ChangeLogSchema]::MD_CONTENT_FORMAT -f $const.Name), $const.Content
+      );
+    }
 
     return $markdown;
   } # Generate
 
-  [string] CreateComparisonLinks() {
-    # should we only get the tags in range?
-    #
-    [PSCustomObject[]]$sortedTags = $this._sourceControl.ReadSortedTags($true, $this.IsDescending);
+  [string] CreateComparisonLinks([PSCustomObject[]]$tagsInRange) {
     [string]$baseUrl = $this._sourceControl.ReadRemoteUrl();
-
     [System.Text.StringBuilder]$builder = [System.Text.StringBuilder]::new();
 
-    if ($sortedTags.Count -gt 1) {
-      [PSCustomObject]$first, [PSCustomObject[]]$others = $sortedTags;
+    if ($tagsInRange.Count -gt 1) {
+      [PSCustomObject]$first, [PSCustomObject[]]$others = $tagsInRange;
 
       foreach ($second in $others) {
         [string]$name = [GeneratorUtils]::TagDisplayName($first.Label);
@@ -1216,7 +1399,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
 
   [string] CreateDisabledWarnings() {
 
-    [hashtable]$disabled = $this.Options.Output?.Warnings.Disable;
+    [hashtable]$disabled = $this.Options.Output?.Warnings?.Disable;
 
     [string]$content = if (($null -ne $disabled) -and $disabled.PSBase.Count -gt 0) {
       [System.Text.StringBuilder]$builder = [System.Text.StringBuilder]::new();
@@ -1249,21 +1432,47 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     }
     return $content;
   }
+
+  [string] CreateSchemaVersion() {
+    return $("<!-- Elizium.Loopz ChangeLog options json schema version '{0}' -->" -f [ChangeLogSchema]::SCHEMA_VERSION);
+  }
 } # MarkdownChangeLogGenerator
 
 # === [ ChangeLogSchema ] ======================================================
 #
+# conditional -> ?{var;name}
+
 class ChangeLogSchema {
   static [string]$PREFIXES = '?!&^*+';
   static [regex]$FieldRegex = [regex]::new(
-    "(?<prefix>[$([ChangeLogSchema]::PREFIXES)])\{(?<symbol>[\w\-]+)\}"
+    "(?<prefix>[$([ChangeLogSchema]::PREFIXES)])\{(?:(?<var>[\w\-]+);)?(?<symbol>[\w\-]+)(?:;(?<else>[\w\-]+))?\}"
   );
   static [string] Snippet([char]$prefix, [string]$symbol) {
     return "$($prefix){$($symbol)}";
   }
-  static [string[]]$SEGMENTS = @('break', 'change', 'scope', 'type');
+
+  static [string[]] GetSegments([string[]]$segments) {
+    [string[]]$result = @('break', 'change', 'scope', 'type');
+    if ($segments.Count -eq 1 -and $segments[0] -eq 'ungrouped') {
+      $result += 'ungrouped';
+    }
+
+    return $result;
+  }
   static [string]$BREAKING = 'breaking';
   static [string]$NON_BREAKING = 'non-breaking';
+  static [string]$LOOKUP_UNKNOWN = '?';
+
+  static [string] StatementPlaceholder() {
+    return [ChangeLogSchema]::Snippet('*', '$');
+  }
+  static [string]$MD_CONTENT_FORMAT = "[[{0}]]";
+  static [string]$TEMPLATE_FILENAME = "TEMPLATE.md";
+
+  static [string]$OPTIONS_SCHEMA_FILENAME = 'change-log.options.schema.json';
+  static [string]$SCHEMA_VERSION = '1.0.0';
+
+  static [string]$DIRECTORY = '.loopz';
 } # ChangeLogSchema
 
 # === [ GeneratorUtils ] =======================================================
@@ -1272,8 +1481,10 @@ class GeneratorUtils {
   [PSCustomObject]$Options;
   [PSCustomObject]$Output;
   [PSCustomObject]$GeneratorInfo;
+  [regex]$SpacesRegex = [regex]::new('\s{2,}');
 
   static [hashtable]$_headings = @{
+    'H2'    = '## ';
     'H3'    = '### ';
     'H4'    = '#### ';
     'H5'    = '##### ';
@@ -1290,7 +1501,7 @@ class GeneratorUtils {
 
     '_B' = [PSCustomObject]@{
       PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
-      Instance   = 'Breaking';
+      Instance   = 'BreakingStatus';
       Variable   = 'break';
     };
 
@@ -1299,7 +1510,6 @@ class GeneratorUtils {
       Instance   = 'ChangeTypes';
       Variable   = 'change';
     };
-
 
     '_S' = [PSCustomObject]@{
       PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
@@ -1322,6 +1532,12 @@ class GeneratorUtils {
 
   static [string] ConditionalSnippet([string]$value) {
     return [ChangeLogSchema]::Snippet('?', $value)
+  }
+
+  static [string] ConditionalVariableSnippet([string]$var, [string]$value, [string]$else) {
+    return [string]::IsNullOrEmpty($else) ? `
+      [ChangeLogSchema]::Snippet('?', "$($var);$($value)") : `
+      [ChangeLogSchema]::Snippet('?', "$($var);$($value);$($else)");
   }
 
   static [string] LiteralSnippet([string]$value) {
@@ -1355,7 +1571,7 @@ class GeneratorUtils {
   }
 
   static [string] TagDisplayName([string]$label) {
-    return $label -eq 'HEAD' ? 'Unreleased' : $label;
+    return $($label -eq 'HEAD') ? 'Unreleased' : $label;
   }
 
   [string] AvatarImg([string]$username) {
@@ -1389,87 +1605,98 @@ class GeneratorUtils {
     return $link;
   }
 
-  [string] ThenReplaceStmt([string]$statement, [string]$symbol, [boolean]$condition, [string]$with) {
-    [string]$symbolExpr = [GeneratorUtils]::AnySnippetExpression($symbol);
-    [string]$replaced = ($condition) ? `
-      $this.Output.Statements.$statement -replace $symbolExpr, $with : [string]::Empty;
-
-    return $replaced;
-  }
-
-  [string] ThenReplaceStmt([string]$statement, [boolean]$condition, [string]$with) {
-    [string]$replaced = ($condition) ? $this.Output.Statements.$statement : $with;
-
-    return $replaced;
-  }
-
-  # conditional BreakStmt statement
-  #
-  [string] IfBreakStmt([PSCustomObject]$commit, [hashtable]$variables) {
-    [string]$breakStmt = $this.ThenReplaceStmt(
-      'Break',
-      'break',
-      (($commit) -and ($commit)?.Info -and $commit.Info.IsBreaking),
-      $this.Output.Literals.Break
-    );
-
-    return $breakStmt;
-  }
-
-  # conditional ChangeStmt statement
-  #
-  [string] IfChangeStmt([PSCustomObject]$commit, [hashtable]$variables) {
-    [string]$changeStmt = $this.ThenReplaceStmt(
-      'Change',
-      'change', 
-      ($variables.ContainsKey('change')),
-      $variables['change']
-    );
-    return $changeStmt;
-  }
-
-  # conditional SquashedStmt statement
-  #
-  [string] IfSquashedStmt([PSCustomObject]$commit, [hashtable]$variables) {
-    [string]$squashedStmt = $this.ThenReplaceStmt(
-      'Squashed',
-      (($commit) -and ($commit)?.IsSquashed -and $commit.IsSquashed),
-      [string]::Empty
-    );
-    return $squashedStmt;
-  }
-
-  # conditional IssueStmt statement
-  #
-  [string] IfIssueLinkStmt([PSCustomObject]$commit, [hashtable]$variables) {
-    [string]$issueLinkStmt = $this.ThenReplaceStmt(
-      'IssueLink',
-      'issue-link',
-      ($variables.ContainsKey('issue-link')),
-      $variables['issue-link']
-    );
-    return $issueLinkStmt;
-  }
-
-  # conditional MetaStmt statement
-  #
-  [string] IfMetaStmt([PSCustomObject]$commit, [hashtable]$variables) {
-    [string]$metaStmt = $this.Evaluate($this.Output.Statements.Meta, $commit, $variables);
-
-    return [string]::IsNullOrEmpty($metaStmt) ? [string]::Empty : $metaStmt;
-  }
-
-  [hashtable] GetHeadingVariables([PSCustomObject]$segmentInfo, [PSCustomObject]$tagInfo) {
-
-    [hashtable]$headingVariables = @{
-      'date'        = $tagInfo.Date.ToString($this.Output.Literals.DateFormat);
-      'display-tag' = [GeneratorUtils]::TagDisplayName($tagInfo.Label);
-      'tag'         = $tagInfo.Label;
+  [string] getVariable([string]$name, [PSCustomObject]$commit, [hashtable]$variables) {
+    [string]$result = if ($variables.ContainsKey($name)) {
+      $variables[$name];
+    }
+    elseif (($null -ne $commit) -and ($null -ne $commit.Info) -and $commit.Info.Groups.ContainsKey($name)) {
+      $commit.Info.Groups[$name].Value.Trim();
+    }
+    else {
+      [string]::Empty;
     }
 
-    [ChangeLogSchema]::SEGMENTS | ForEach-Object {
-      if (${segmentInfo}?.$_) {
-        $headingVariables[$_] = $segmentInfo.$_;
+    return $result;
+  }
+
+  [string] getStatement([string]$name, [PSCustomObject]$options, [hashtable]$variables) {
+
+    [string]$result = if ($name.EndsWith('Stmt')) {
+      $name = $name -replace 'Stmt';
+
+      if (-not([string]::IsNullOrEmpty($options.Output.Statements?.$name))) {
+        $options.Output.Statements.$name;
+      }
+      else {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "GeneratorUtils.get-statement: error in options file" +
+            ", '$($name)' is not defined Statement"
+          )
+        );
+      }
+    }
+    elseif (-not([string]::IsNullOrEmpty($options.Output.Literals?.$name))) {
+      $options.Output.Literals.$name;
+    }
+    else {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "GeneratorUtils.get-statement: error in options file" +
+          ", '$($name)' is not defined Literal"
+        )
+      );
+    }
+
+    return $result;
+  }
+
+  # generic conditional statement with else
+  #
+  [string] IfStatement(
+    [string]$variable, [string]$stmt, [PSCustomObject]$commit,
+    [hashtable]$variables, [string]$else, [string[]]$trail) {
+
+    [string]$variableValue = $this.getVariable($variable, $commit, $variables);
+    [boolean]$affirmative = (-not([string]::IsNullOrEmpty($variableValue))) -and ($variableValue -ne 'false');
+
+    [string]$result = if ($affirmative) {
+      [string]$stmtValue = $this.getStatement($stmt, $this.Options, $variables);
+      $this.evaluateStmt($stmtValue, $commit, $variables, $trail);
+    }
+    else {
+      if (-not([string]::IsNullOrEmpty($else))) {
+        [string]$elseValue = $this.getStatement($else, $this.Options, $variables);
+        $this.Evaluate($elseValue, $commit, $variables);
+      }
+      else {
+        [string]::Empty;
+      }
+    }
+
+    return $result
+  }
+
+  # $segmentInfo can be null
+  #
+  [hashtable] GetHeadingVariables([PSCustomObject]$segmentInfo, [PSCustomObject]$tagInfo) {
+
+    [string]$displayTag = [GeneratorUtils]::TagDisplayName($tagInfo.Label);
+    [hashtable]$headingVariables = @{
+      'date'        = $tagInfo.Date.ToString($this.Output.Literals.DateFormat);
+      'display-tag' = $displayTag;
+      'tag'         = $tagInfo.Label;
+      'link'        = "[$displayTag]";
+    }
+
+    if ($null -ne $segmentInfo) {
+      $headingVariables['active-leg'] = $segmentInfo.ActiveLeg;
+      $headingVariables['active-segment'] = $segmentInfo.ActiveSegment;
+
+      [ChangeLogSchema]::GetSegments($this._segments) | ForEach-Object {
+        if (${segmentInfo}?.$_) {
+          $headingVariables[$_] = $segmentInfo.$_;
+        }
       }
     }
 
@@ -1484,6 +1711,7 @@ class GeneratorUtils {
       'date'          = $commit.Date.ToString($this.Output.Literals.DateFormat);
       'display-tag'   = [GeneratorUtils]::TagDisplayName($tagInfo.Label);
       'is-breaking'   = $commit.Info.IsBreaking;
+      'is-squashed'   = $commit.Info.IsSquashed;
       'subject'       = $commit.Subject;
       'tag'           = $tagInfo.Label;
       'commitid'      = $commit.CommitId;
@@ -1499,7 +1727,7 @@ class GeneratorUtils {
     }
 
     if (${commit}?.Info) {
-      [ChangeLogSchema]::SEGMENTS | ForEach-Object {
+      [ChangeLogSchema]::GetSegments($this._segments) | ForEach-Object {
         if ($commit.Info.Selectors.ContainsKey($_)) {
           $commitVariables[$_] = $commit.Info.Selectors[$_];
         }
@@ -1508,6 +1736,38 @@ class GeneratorUtils {
 
     return $commitVariables;
   } # GetCommitVariables
+
+  # |<-- most recent                                         oldest -->|
+  #     0,     1,     2,     3,     4,     5,     6,     7,     8,     9
+  #  HEAD, 3.0.2, 3.0.1, 3.0.0, 2.0.0, 1.2.0, 1.1.1, 1.1.0, 1.0.1, 1.0.0
+  #               |<-- in range  -->| (assuming in range = 2.0.0..3.0.1)
+  #               last in range index = 4, so we add item with index 5
+  #
+  # If tags in range includes the oldest tag, then just return tagsInRange
+  # otherwise we need to get 1 extra older tag from allTags and append
+  # that to end of tagsInRange.
+  #
+  [PSCustomObject[]] GetLinkTags([PSCustomObject[]]$tagsInRange, [PSCustomObject[]]$allTags) {
+
+    [PSCustomObject]$lastTagInRange = $tagsInRange[-1];
+    [PSCustomObject]$oldestTag = $allTags[-1];
+
+    [PSCustomObject[]]$linkTags = if ($lastTagInRange.Label -eq $oldestTag.Label) {
+      @($tagsInRange);
+    }
+    else {
+      [System.Predicate[PSCustomObject]]$predicate = [System.Predicate[PSCustomObject]] {
+        param(
+          [PSCustomObject]$item
+        )
+        $item.Label -eq $lastTagInRange.Label;
+      }
+      [int]$indexLastInRange = [Array]::FindIndex($allTags, $predicate);
+      @($tagsInRange) + $allTags[$indexLastInRange + 1];
+    }
+
+    return $linkTags;
+  }
 
   [string] Evaluate(
     [string]$source,
@@ -1539,13 +1799,13 @@ class GeneratorUtils {
 
             [string]$target, [string]$with = switch ($prefix) {
               '*' {
-                [string]$snippet = [GeneratorUtils]::StatementSnippet($symbol);
+                [string]$snippet = $groups[0];
                 $trail += $symbol;
 
                 if ($evolve.Contains($snippet)) {
                   [string]$property = $symbol -replace 'Stmt';
 
-                  if ($this.Output.Statements.psobject.properties.match($property).Count -eq 0) {
+                  if ($null -eq $this.Output.Statements?.$property) {
                     throw [System.Management.Automation.MethodInvocationException]::new(
                       "GeneratorUtils.evaluateStmt(bad options config): " +
                       "'$($symbol)' is not a defined Statement");
@@ -1562,25 +1822,24 @@ class GeneratorUtils {
               }
 
               '?' {
-                [string]$snippet = [GeneratorUtils]::ConditionalSnippet($symbol);
+                [string]$variable = $groups['var'].Value;
+                [string]$else = ($groups.ContainsKey('else')) ? $groups['else'].Value : [string]::Empty;
+                [string]$snippet = $groups[0];
                 $trail += $symbol;
 
                 if ($evolve.Contains($snippet)) {
-                  [string]$replacement = try {
-                    $this."If$symbol"($commit, $variables);
-                  }
-                  catch {
-                    throw [System.Management.Automation.MethodInvocationException]::new(
-                      "GeneratorUtils.evaluateStmt(bad options config): " +
-                      "'$($symbol)' is not a defined conditional statement");
-                  }
+                  [string]$replacement = $this.IfStatement(
+                    $variable, $symbol, $commit, $variables, $else, $trail
+                  );
 
                   # we need to recurse here just in-case the expansion has resulted in
                   # unresolved references.
                   #
-                  $replacement = $this.evaluateStmt(
-                    $replacement, $commit, $variables, $trail
-                  );
+                  if (-not([string]::IsNullOrEmpty($replacement))) {
+                    $replacement = $this.evaluateStmt(
+                      $replacement, $commit, $variables, $trail
+                    );
+                  }
 
                   $snippet, $replacement
                 }
@@ -1588,11 +1847,10 @@ class GeneratorUtils {
               }
 
               '!' {
-                [string]$snippet = [GeneratorUtils]::LiteralSnippet($symbol);
+                [string]$snippet = $groups[0];
 
                 if ($evolve.Contains($snippet)) {
-
-                  if ($this.Output.Literals.psobject.properties.match($symbol).Count -eq 0) {
+                  if ($null -eq ($this.Output.Literals)?.$symbol) {
                     throw [System.Management.Automation.MethodInvocationException]::new(
                       "GeneratorUtils.evaluateStmt(bad options config): " +
                       "'$($symbol)' is not a defined Literal"
@@ -1605,7 +1863,7 @@ class GeneratorUtils {
               }
 
               '&' {
-                [string]$snippet = [GeneratorUtils]::LookupSnippet($symbol);
+                [string]$snippet = $groups[0];
 
                 if ($evolve.Contains($snippet)) {
                   if (-not([GeneratorUtils]::_lookups.ContainsKey($symbol))) {
@@ -1623,7 +1881,7 @@ class GeneratorUtils {
 
                   [string]$replacement = (
                     $this.Output.Lookup.$instance.ContainsKey($seek)) ? `
-                    $this.Output.Lookup.$instance[$seek] : $this.Output.Lookup.$instance['?'];
+                    $this.Output.Lookup.$instance[$seek] : $($this.Output.Lookup.$instance['?'] ?? [string]::Empty);
 
                   $snippet, $replacement
                 }
@@ -1631,12 +1889,12 @@ class GeneratorUtils {
               }
 
               '^' {
-                [string]$snippet = [GeneratorUtils]::NamedGroupRefSnippet($symbol);
+                [string]$snippet = $groups[0];
 
                 if ($evolve.Contains($snippet)) {
                   [string]$replacement = if (($commit)?.Info.Groups -and `
                       $commit.Info.Groups[$symbol].Success) {
-                    $commit.Info.Groups[$symbol].Value;
+                    $commit.Info.Groups[$symbol].Value.Trim();
                   }
                   else {
                     [string]::Empty;
@@ -1648,7 +1906,7 @@ class GeneratorUtils {
               }
 
               '+' {
-                [string]$snippet = [GeneratorUtils]::VariableSnippet($symbol);
+                [string]$snippet = $groups[0];
 
                 if ($evolve.Contains($snippet)) {
                   [string]$replacement = ($variables.ContainsKey($symbol)) `
@@ -1692,3 +1950,793 @@ class GeneratorUtils {
     return [ChangeLogSchema]::FieldRegex.Replace($value, '');
   }
 } # GeneratorUtils
+
+# === [ ChangeLogOptionsManager ] ==============================================
+#
+class ChangeLogOptionsManager {
+  [PSCustomObject]$OptionsInfo;
+  [boolean]$Found;
+
+  hidden [PSCustomObject]$_proxyGit;
+
+  ChangeLogOptionsManager([PSCustomObject]$optionsInfo) {
+    $this.OptionsInfo = $optionsInfo;
+  }
+
+  # $optionsInfo Must contain:
+  # - Base
+  # - DirectoryName
+  # - GroupBy
+  #
+  ChangeLogOptionsManager([PSCustomObject]$proxyGit, [PSCustomObject]$optionsInfo) {
+
+    $this._proxyGit = $proxyGit;
+    $this.OptionsInfo = $optionsInfo;
+  }
+
+  [void] Init() {
+    $this._proxyGit = [PSCustomObject]@{} | Add-Member `
+      -MemberType ScriptMethod -Name 'ReadRootPath' -Value $($this._sbReadRootPath) -PassThru;
+
+    [void]$this.IsValidGroupBy($this.OptionsInfo.GroupBy);
+  }
+
+  # ReadRootPath
+  #
+  hidden [scriptblock] $_sbReadRootPath = [scriptblock] {
+    [OutputType([string])]
+    param()
+
+    return $(git rev-parse --show-toplevel);
+  }
+  [string] ReadRootPath() {
+    [string]$root = if (($this.OptionsInfo)?.Root -and `
+        -not([string]::IsNullOrEmpty($this.OptionsInfo.Root))) {
+      $this.OptionsInfo.Root
+    }
+    else {
+      $this._proxyGit.ReadRootPath()
+    }
+    return $root;
+  }
+
+
+
+  [string] FileName([string]$name, [boolean]$ifEmoji) {
+    return $ifEmoji ? $($name + '-emoji' + $this.OptionsInfo.Base) : $($name + $this.OptionsInfo.Base);
+  }
+
+  [string] FullPath([string]$name, [boolean]$ifEmoji) {
+    [string]$directoryPath = $this.DirectoryPath()
+    [string]$fileName = $this.FileName($name, $ifEmoji);
+    [string]$withExtension = $fileName + '.json';
+    [string]$fullPath = Join-Path -Path $directoryPath -ChildPath $withExtension;
+
+    return $fullPath;
+  }
+
+  [string] DirectoryPath([string]$fileName) {
+    [string]$directoryPath = $this.DirectoryPath();
+    return Join-Path -Path $directoryPath $fileName; 
+  }
+
+  [string] DirectoryPath() {
+    [string]$root = $this.ReadRootPath();
+    [string]$directoryPath = Join-Path -Path $root -ChildPath $this.OptionsInfo.DirectoryName;
+    return $directoryPath;
+  }
+
+  [string] EnsureRepoDirectoryPath() {
+    [string]$directoryPath = $this.DirectoryPath();
+
+    if (-not(Test-Path -LiteralPath $directoryPath)) {
+      [void]$(New-Item -ItemType 'Directory' -Path $directoryPath);
+    }
+
+    return $directoryPath;
+  }
+
+  [PSCustomObject] Load([string]$name, [boolean]$ifEmoji) {
+    [string]$fullPath = $this.FullPath($name, $ifEmoji);
+    [PSCustomObject]$options = if (Test-Path -LiteralPath $fullPath) {
+      [string]$json = Get-Content -LiteralPath $fullPath;
+      [string]$schemaPath = Join-Path -Path $PSScriptRoot `
+        -ChildPath $([ChangeLogSchema]::OPTIONS_SCHEMA_FILENAME);
+      $null = Test-Json -Json $json -SchemaFile $schemaPath;
+
+      $temp = $($json | ConvertFrom-Json -Depth 20);
+      $this.Init($temp);
+    }
+
+    return $options;
+  }
+
+  [PSCustomObject] Init([PSCustomObject]$options) {
+    $options = $this.restoreTypes($options);
+    $this.verify($options);
+
+    3..6 | Foreach-Object {
+      [string]$headingType = "H$($_)";
+      [string]$injection = $this.injectSegment(
+        $options.Output.Headings.$headingType, $headingType, $options.Output.GroupBy
+      );
+      $options.Output.Headings.$headingType = $injection;
+    }
+
+    return $options;
+  }
+
+  [PSCustomObject] Eject([string]$name, [boolean]$ifEmoji) {
+    [PSCustomObject]$options = $this.NewOptions($name, $ifEmoji);
+    $this.Save($name, $ifEmoji, $options);
+
+    $options.Output.Template = $this.Template();
+    return $options;
+  }
+
+  [void] Save([string]$name, [boolean]$ifEmoji, [PSCustomObject]$options) {
+    [string]$fullPath = $this.FullPath($name, $ifEmoji);
+    [string]$extension = [System.IO.Path]::GetExtension($fullPath);
+    [string]$resolvedName = [System.IO.Path]::GetFileName($fullPath);
+    [string]$withoutExtension = [System.IO.Path]::GetFileNameWithoutExtension($resolvedName);
+    [string]$testPath = $fullPath;
+    [boolean]$verified = $false;
+    [string]$alternate = [string]::Empty
+    [int]$appendage = 0;
+
+    do {
+      if (Test-Path -LiteralPath $testPath) {
+        $appendage++;
+        $alternate = "$($withoutExtension)-{0:d2}$($extension)" -f $appendage;
+        $testPath = $this.DirectoryPath($alternate);
+      }
+      else {
+        $verified = $true;
+      }
+    } while (-not($verified));
+
+    if (Test-Path -LiteralPath $fullPath) {
+      Rename-Item -LiteralPath $fullPath `
+        -NewName $([System.IO.Path]::GetFileName($testPath));
+    }
+
+    $content = $options | ConvertTo-Json -Depth 20;
+    $this.EnsureRepoDirectoryPath();
+    Set-Content -LiteralPath $fullPath -Value $content;
+  }
+
+  [object] Template() {
+    [string]$templateName = [ChangeLogSchema]::TEMPLATE_FILENAME;
+    [string]$templatePath = $this.DirectoryPath($templateName);
+
+    [object]$content = if (Test-Path -LiteralPath $templatePath) {
+      Get-Content -LiteralPath $templatePath -Raw;
+    }
+    else {
+      Set-Content -LiteralPath $templatePath -Value $([ChangeLogOptionsManager]::DEFAULT_TEMPLATE);
+      [ChangeLogOptionsManager]::DEFAULT_TEMPLATE;
+    }
+
+    [string]$format = [ChangeLogSchema]::MD_CONTENT_FORMAT;
+    'warnings', 'content', 'links', 'schema-version' | Foreach-Object {
+      if (-not($content.ToString().Contains($($format -f $_)))) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLogOptionsManager.Template: error in template file ($($templateName))" +
+            ", missing '$($_)' placeholder"
+          )
+        );
+      }
+    }
+
+    return $content;
+  }
+
+  [boolean] IsValidGroupBy([string]$groupBy) {
+    [string[]]$segments = $groupBy -split '/';
+
+    if ($segments.Count -gt 4) {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        "GroupBy '$GroupBy' is invalid, can contain at most 4 segments");
+    }
+
+    [int]$uniqueCount = $($segments | Select-Object -Unique).Count;
+
+    if ($uniqueCount -ne $segments.Count) {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        "GroupBy '$GroupBy' is invalid, contains duplicate segments");
+    }
+
+    return $($null -eq ($segments | Where-Object {
+          [ChangeLogSchema]::GetSegments($this._segments) -notContains $_;
+        }))
+  }
+
+  [PSCustomObject] FindOptions([string]$name, [boolean]$ifEmoji) {
+    [PSCustomObject]$options = $this.Load($name, $ifEmoji);
+
+    if ($null -eq $options) {
+      $this.Found = $false;
+
+      $options = $this.NewOptions($name, $ifEmoji);
+
+      if ($null -ne $options) {
+        $this.Save($name, $ifEmoji, $options);
+      }
+    }
+    else {
+      $this.Found = $true;
+    }
+
+    $options.Output.Template = $this.Template();
+    return $options;
+  }
+
+  [PSCustomObject] NewOptions([string]$name, [boolean]$ifEmoji) {
+    [string]$defaultHeadingStmt = [ChangeLogSchema]::StatementPlaceholder();
+
+    [PSCustomObject]$skeleton = [PSCustomObject]@{
+      PSTypeName    = 'Klassy.ChangeLog.Options';
+      #
+      Snippet       = [PSCustomObject]@{
+        PSTypeName = 'Klassy.ChangeLog.Options.Snippet';
+        #
+        Prefix     = [PSCustomObject]@{
+          PSTypeName    = 'Klassy.ChangeLog.Options.Snippet.Prefix';
+          #
+          Conditional   = '?'; # breakStmt
+          Literal       = '!'; # Anything in Output.Literals
+          Lookup        = '&'; # Anything inside Output.Lookup
+          NamedGroupRef = '^'; # Any named group ref inside include regex(s)
+          Statement     = '*'; # Output.Statements
+          Variable      = '+'; # (type, scope, change, link, tag, date, avatar) (resolved internally)
+        }
+      } # Snippet
+
+      Selection     = [PSCustomObject]@{
+        PSTypeName          = 'Klassy.ChangeLog.Options.Selection';
+        #
+        Order               = 'desc';
+        SquashBy            = '#(?<issue>\d{1,6})'; # optional field
+        Last                = $true;
+        IncludeMissingIssue = $true;
+        Subject             = [PSCustomObject]@{
+          PSTypeName = 'Klassy.ChangeLog.Options.Selection.Subject';
+          #
+          Include    = @(
+            # feat(foo)!: Add new bar (#42)
+            #
+            $(
+              '^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
+              '(?:\((?<scope>[\w]+)\))?(?<break>!)?:\s(?<body>[^\(]+)(?:\(?#(?<issue>\d{1,6})\)?)'
+            )
+
+            # feat(foo)!: #42 Add new bar
+            #
+            $(
+              '^(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
+              '(?:\((?<scope>[\w]+)\))?(?<break>!)?:\s(?:#(?<issue>\d{1,6}))(?<body>[\w\W\s]+)'
+            ),
+
+            # (feat #42)!: Add new bar
+            #
+            $(
+              '^\(?(?<type>fix|feat|build|chore|ci|docs|doc|style|ref|perf|test)' +
+              '\s+(?:#(?<issue>\d{1,6}))?\)?(?<break>!)?:\s(?<body>[\w\W\s]+)'
+            )
+          );
+          Exclude    = @();
+          Change     = '^[\w]+';
+        }
+
+        Tags                = [PSCustomObject]@{
+          PSTypeName = 'Klassy.ChangeLog.Options.Selection.Tags';
+          #
+          # FROM, commits that come after the TAG
+          # UNTIL, commits up to and including TAG
+          #
+          # In these tests, there is no default, however, when we generate
+          # the default config, the default here will be Until = 'HEAD',
+          # which means get everything
+          #
+        }
+      } # Selection
+
+      SourceControl = [PSCustomObject]@{
+        PSTypeName   = 'Klassy.ChangeLog.Options.SourceControl';
+        #
+        Service      = 'GitHub';
+        HostUrl      = 'https://github.com/';
+        AvatarSize   = '24';
+        CommitIdSize = 7;
+      } # SourceControl
+
+      Output        = [PSCustomObject]@{
+        PSTypeName = 'Klassy.ChangeLog.Options.Output';
+        #
+        # special variables:
+        # -> &{_A} = author => indexes into the Authors hash
+        # -> &{_B} = break => indexes into the BreakingStatus hash
+        # -> &{_C} = change => indexes into the Change hash
+        # -> &{_S} = scope => indexes into the Scopes hash if defined
+        # -> &{_T} = type => indexes into the Types hash
+        #
+        Headings   = [PSCustomObject]@{
+          PSTypeName = 'Klassy.ChangeLog.Options.Output.Headings';
+          #
+          H2         = 'Release [+{display-tag}] / +{date}';
+          H3         = $defaultHeadingStmt;
+          H4         = $defaultHeadingStmt;
+          H5         = $defaultHeadingStmt;
+          H6         = $defaultHeadingStmt;
+          Dirty      = 'DIRTY: *{dirtyStmt}';
+        }  # Headings
+
+        GroupBy    = 'scope/type/change/break';
+
+        LookUp     = [PSCustomObject]@{ # => '&'
+          PSTypeName     = 'Klassy.ChangeLog.Options.Output.Lookup';
+          #
+          # => &{_A} ('_A' is a synonym of 'author')
+          #
+          Authors        = @{
+            '?' = $this.useEmoji($ifEmoji, ':woman_office_worker:');
+          }
+          # => &{_B} ('_B' is a synonym of 'break')
+          # In the regex, breaking change is indicated by ! (in accordance with
+          # established wisdom) and this is translated into 'breaking', and if
+          # missing, 'non-breaking', hence the following loop up keys.
+          #
+          BreakingStatus = @{
+            'breaking'     = $this.useEmoji($ifEmoji, ':radioactive: BREAKING CHANGES', 'BREAKING CHANGES');
+            'non-breaking' = $this.useEmoji($ifEmoji, ':recycle: NON BREAKING CHANGES', 'NON BREAKING CHANGES');
+          }
+          # => &{_C} ('_C' is a synonym of 'change')
+          #
+          ChangeTypes    = @{ # The first word in the commit subject after 'type(scope): '
+            'Add'       = $this.useEmoji($ifEmoji, ':heavy_plus_sign:');
+            'Change'    = $this.useEmoji($ifEmoji, ':o:');
+            'Fixed'     = $this.useEmoji($ifEmoji, ':beetle:');
+            'Deprecate' = $this.useEmoji($ifEmoji, ':heavy_multiplication_x:');
+            'Remove'    = $this.useEmoji($ifEmoji, ':heavy_minus_sign:');
+            'Secure'    = $this.useEmoji($ifEmoji, ':key:');
+            'Update'    = $this.useEmoji($ifEmoji, 'isa:Change');
+            '?'         = $this.useEmoji($ifEmoji, ':lock:');
+          }
+
+          # => &{_S} ('_S' is a synonym of 'scope')
+          #
+          Scopes         = @{
+            # this is user defined. It should be maintained. Known scopes in
+            # the project should be defined here
+            #
+            'all' = $this.useEmoji($ifEmoji, ':star:');
+            '?'   = $this.useEmoji($ifEmoji, ':lock:');
+          }
+
+          # => &{_T} ('_T' is a synonym of 'type')
+          # (These types must be consistent with includes regex)
+          #
+          Types          = @{
+            'fix'   = $this.useEmoji($ifEmoji, ':heavy_check_mark:');
+            'feat'  = $this.useEmoji($ifEmoji, ':gift:');
+            'build' = $this.useEmoji($ifEmoji, ':hammer:');
+            'chore' = $this.useEmoji($ifEmoji, ':nut_and_bolt:');
+            'ci'    = $this.useEmoji($ifEmoji, ':trophy:');
+            'doc'   = $this.useEmoji($ifEmoji, 'isa:docs');
+            'docs'  = $this.useEmoji($ifEmoji, ':clipboard:');
+            'style' = $this.useEmoji($ifEmoji, ':hotsprings:');
+            'ref'   = $this.useEmoji($ifEmoji, ':gem:');
+            'perf'  = $this.useEmoji($ifEmoji, ':rocket:');
+            'test'  = $this.useEmoji($ifEmoji, ':test_tube:');
+            '?'     = $this.useEmoji($ifEmoji, ':lock:');
+          }
+        } # Lookup
+
+        Literals   = [PSCustomObject]@{ # => '!'
+          PSTypeName    = 'Klassy.ChangeLog.Options.Output.Literals';
+          #
+          Broken        = $this.useEmoji($ifEmoji, ':warning:', 'break');
+          BucketEnd     = '---';
+          DateFormat    = 'yyyy-MM-dd';
+          Dirty         = $this.useEmoji($ifEmoji, ':poop:', 'dirty');
+          Uncategorised = 'uncategorised';
+        } # Literals
+
+        Statements = [PSCustomObject]@{ # => '*'
+          PSTypeName   = 'Klassy.ChangeLog.Options.Output.Statements';
+          #
+          # These are overwritten but specified here as a reference to all
+          # valid fields.
+          #
+          ActiveScope  = "+{scope}";
+          Author       = ' by `@+{author}` &{_A}';
+          Avatar       = ' by `@+{author}` +{avatar-img}';
+          Break        = '&{_B}';
+          Breaking     = '!{broken} *BREAKING CHANGE* ';
+          Change       = 'Change Type(&{_C}+{change})';
+          ChangeCommit = '&{_C} ';
+          Commit       = '+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}?{change;changeCommitStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
+          Dirty        = '!{dirty}';
+          DirtyCommit  = '+ ?{is-breaking;breakingStmt}+{subject}';
+          IssueLink    = ' \<**+{issue-link}**\>';
+          Meta         = ' (Id: **+{commitid-link}**)?{issue-link;issueLinkStmt}';
+          Scope        = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
+          Squashed     = 'SQUASHED: ';
+          Subject      = '**^{body}**';
+          Type         = 'Commit Type(&{_T}+{type})';
+          Ungrouped    = 'UNGROUPED';
+        } # Statements
+
+        Warnings   = [PSCustomObject]@{
+          PSTypeName = 'Klassy.ChangeLog.Options.Output.Warnings';
+          Disable    = @{
+            'MD013' = 'line-length';
+            'MD024' = 'no-duplicate-heading/no-duplicate-header';
+            'MD026' = 'no-trailing-punctuation';
+            'MD033' = 'no-inline-html';
+          }
+        } # Warnings
+
+        Base       = 'ChangeLog';
+        Template   = @();
+      } # Output
+    } # Skeleton options
+
+    [PSCustomObject]$options = switch ($name) {
+      'Alpha' {
+        $skeleton.Output.Statements.Commit = $(
+          "+ ?{scope;scopeCommitStmt}?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}" +
+          "?{change;changeCommitStmt}*{subjectStmt}?{issue-link;issueOnlyStmt}"
+        );
+        $skeleton.Output.Statements | Add-Member `
+          -NotePropertyName 'ScopeCommit' -NotePropertyValue '***+{scope}***:';
+
+        $skeleton.Output.Statements | Add-Member `
+          -NotePropertyName 'IssueOnly' -NotePropertyValue '*{IssueLink}';
+        $skeleton;
+
+        break;
+      }
+
+      'Elizium' {
+        $skeleton.Output.Statements.Commit = $(
+          "+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}" +
+          "?{change;changeCommitStmt}*{subjectStmt}*{authorStmt}*{metaStmt}"
+        );
+        $skeleton;
+
+        break;
+      }
+
+      'Test' {
+        $skeleton.Output.Statements.Commit = $(
+          "+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}" +
+          "*{changeStmt}*{subjectStmt}*{authorStmt}*{metaStmt}"
+        );
+        $skeleton;
+
+        break;
+      }
+
+      'Zen' {
+        $skeleton.Output.Statements.Commit = $(
+          "+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}" +
+          "?{change;changeCommitStmt}*{subjectStmt}"
+        );
+
+        $skeleton;
+
+        break;
+      }
+
+      default {
+        $skeleton;
+      }
+    }
+
+    return $options;
+  } # NewOptions
+
+  [string] useEmoji([boolean]$emojiRequired, [string]$emojiValue) {
+    return $this.useEmoji($emojiRequired, $emojiValue, [string]::Empty);
+  }
+
+  [string] useEmoji([boolean]$emojiRequired, [string]$emojiValue, [string]$otherwise) {
+    return $emojiRequired ? $emojiValue : $otherwise;
+  }
+
+  [string] injectSegment([string]$headingStatement, [string]$headingType, [string]$groupByValue) {
+    return $this.injectSegment($headingStatement, $headingType, $groupByValue, 'NONE');
+  }
+
+  # eg headingStatement = 'HEADING: *{$}' => 'HEADING: *{scopeStmt}'
+  #
+  [string] injectSegment([string]$headingStatement, [string]$headingType,
+    [string]$groupByValue, [string]$otherwise) {
+
+    [string]$placeholder = [ChangeLogSchema]::StatementPlaceholder();
+
+    if (-not($headingStatement.Contains($placeholder))) {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+          ", header-$($headingType) ($headingStatement) is missing statement placeholder ($placeholder)"
+        )
+      );
+    }
+
+    [string[]]$segments = $groupByValue -split '/';
+
+    # eg:
+    # H3 = '*{scopeStmt}';
+    # H4 = '*{typeStmt}';
+    # H5 = '*{breakingStmt}'
+    # H6 = '*{changeStmt}';
+    #
+    [string]$heading = if ($segments -and ($segments.Count -gt 0)) {
+      if ($segments.Count -eq 1) {
+        [ChangeLogSchema]::Snippet('*', $($segments[0] + 'Stmt'));
+      }
+      else {
+        # eg:
+        # H3   /H4  /H5   /H6
+        # scope/type/break/change
+        #
+        [int]$headingNumeral = [int]::Parse($headingType[1]);
+        
+        if ($headingNumeral -in 3..6) {
+          [int]$index = $($headingNumeral - 3);
+
+          if ($index -lt $segments.Count) {
+            [ChangeLogSchema]::Snippet(
+              '*', $($segments[$($headingNumeral - 3)] + 'Stmt')
+            );
+          }
+          else {
+            $otherwise;
+          }
+        }
+        else {
+          $otherwise;
+        }
+      }
+    }
+    else {
+      $otherwise;
+    }
+    
+    return $headingStatement.Replace($placeholder, $heading);
+  }
+
+  [PSCustomObject] restoreTypes([PSCustomObject]$options) {
+    # This is required because ConvertTo-Json/ConvertFrom-Json fails to preserve
+    # the PSTypeName members.
+    #
+    $this.restoreTypeName($options, 'Options');
+    $this.restoreTypeName(${options}?.Snippet, 'Options.Snippet');
+    $this.restoreTypeName(${options}?.Snippet?.Prefix, 'Options.Snippet.Prefix');
+    $this.restoreTypeName(${options}?.Selection, 'Options.Selection');
+    $this.restoreTypeName(${options}?.Selection?.Tags, 'Options.Selection.Tags');
+    $this.restoreTypeName(${options}?.SourceControl, 'Options.SourceControl');
+
+    [PSCustomObject]$output = ($options)?.Output;
+    if ($null -ne $output) {
+      $this.restoreTypeName($output, 'Options.Output');
+      $this.restoreTypeName(${output}?.Headings, 'Options.Output.Headings');
+      $this.restoreTypeName(${output}?.Lookup, 'Options.Output.Lookup');
+      $this.restoreTypeName(${output}?.Literals, 'Options.Output.Literals');
+      $this.restoreTypeName(${output}?.Statements, 'Options.Output.Statements');
+      $this.restoreTypeName(${output}?.Warnings, 'Options.Output.Warnings');
+    }
+    else {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "ChangeLogOptionsManager.restoreTypes: error in options file" +
+          ", missing 'Output' entry"
+        )
+      );
+    }
+
+    # Repair the hashtables
+    #
+    if (${output}?.Lookup -and (-not($output.Lookup -is [PSCustomObject]))) {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "ChangeLogOptionsManager.restoreTypes: error in options file" +
+          ", Output.Lookup is not an object (type: '$($output.Lookup.GetType())')"
+        )
+      );
+    }
+
+    [PSCustomObject]$lookup = ${output}?.Lookup;
+    $this.repairHashTable($lookup, 'Authors', $true);
+    $this.repairHashTable($lookup, 'BreakingStatus', $false);
+    $this.repairHashTable($lookup, 'ChangeTypes', $true);
+    $this.repairHashTable($lookup, 'Scopes', $true);
+    $this.repairHashTable($lookup, 'Types', $true);
+    $this.repairHashTable(${output}?.Warnings, 'Disable', $false);
+
+    return $options;
+  }
+
+  [void] restoreTypeName([object]$node, [string]$path) {
+    try {
+      if (-not($node -is [PSCustomObject])) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+            ", item at path: '$path' is not an object"
+          )
+        );
+      }
+
+      if ($null -ne $node) {
+        $node.PSObject.TypeNames.Insert(0, "Klassy.ChangeLog.$path");
+      }
+      else {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+            ", missing entry at: '$path'"
+          )
+        );
+      }
+    }
+    catch {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "ChangeLogOptionsManager.restoreTypeName: failed to restore type for '$path'" +
+          ", error in options file."
+        )
+      );
+    }
+  }
+
+  [void] repairHashTable([object]$node, [string]$name, [boolean]$withDefaultCheck) {
+    # This method is required because ConvertTo-Json/ConvertFrom-Json fails to preserve
+    # hashtables. To be fair, there is no distinction between a hashtable and
+    # PSCustomObject in JSON notation, so there is no way to know what type an entry should
+    # be. Using -AsHashTable on ConvertFrom-Json is of no use because it not selective. It
+    # would convert everything to hashtables which is not what we want. So we convert
+    # individual entries manually ourself.
+    #
+    if ($null -ne $node) {
+      if (-not($node -is [PSCustomObject])) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+            ", item '$name' is not an object"
+          )
+        );
+      }
+
+      if ($node.$name -is [PSCustomObject]) {
+        [PSCustomObject]$target = $node.$name;
+        [hashtable]$hash = @{}
+
+        foreach ($property in $target.psobject.properties.name) {
+          $hash[$property] = $target.$property;
+        }
+        $node.$name = $hash;
+
+        if ($withDefaultCheck) {
+          if (-not($hash.ContainsKey([ChangeLogSchema]::LOOKUP_UNKNOWN))) {
+            throw [System.Management.Automation.MethodInvocationException]::new(
+              $(
+                "ChangeLogOptionsManager.repairHashTable: error in options file" +
+                ", '$([ChangeLogSchema]::LOOKUP_UNKNOWN)' entry for: '$name'"
+              )
+            );
+          }
+        }
+      }
+      else {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLogOptionsManager.repairHashTable: error in options file" +
+            ", entry for: '$name' is not an object (type: '$($node.$name.GetType())')"
+          )
+        ); 
+      }
+    }
+    else {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "ChangeLogOptionsManager.repairHashTable: error in options file" +
+          ", missing hashtable entry for: '$name'"
+        )
+      );
+    }
+  }
+
+  [void] verify([PSCustomObject]$options) {
+    [array]$checklist = @(
+      @{ Node = $options.Selection; Member = 'Subject'; Type = [PSCustomObject]; Path = './Selection'; },
+      @{ Node = $options.Selection; Member = 'Tags'; Type = [PSCustomObject]; Path = './Tags'; },
+      @{ Node = $options.SourceControl; Member = 'AvatarSize'; Type = [string]; Path = './SourceControl'; },
+      @{ Node = $options.SourceControl; Member = 'CommitIdSize'; Type = [long]; Path = './SourceControl'; },
+      @{ Node = $options.Output.Headings; Member = 'Dirty'; Type = [string]; Path = './Output/Headings'; }
+      @{ Node = $options.Output; Member = 'GroupBy'; Type = [string]; Path = './Output'; },
+      @{ Node = $options.Output.Literals; Member = 'Broken'; Type = [string]; Path = './Output.Literals'; },
+      @{ Node = $options.Output.Literals; Member = 'BucketEnd'; Type = [string]; Path = './Output.Literals'; },
+      @{ Node = $options.Output.Literals; Member = 'DateFormat'; Type = [string]; Path = './Output.Literals'; },
+      @{ Node = $options.Output.Literals; Member = 'Dirty'; Type = [string]; Path = './Output.Literals'; },
+      @{ Node = $options.Output.Literals; Member = 'Uncategorised'; Type = [string]; Path = './Output.Literals'; },
+      @{ Node = $options.Output.Statements; Member = 'Break'; Type = [string]; Path = './Output.Statements'; },
+      @{ Node = $options.Output.Statements; Member = 'Change'; Type = [string]; Path = './Output.Statements'; },
+      @{ Node = $options.Output.Statements; Member = 'Scope'; Type = [string]; Path = './Output.Statements'; },
+      @{ Node = $options.Output.Statements; Member = 'Type'; Type = [string]; Path = './Output.Statements'; },
+      @{ Node = $options.Output.Statements; Member = 'Commit'; Type = [string]; Path = './Output.Statements'; },
+      @{ Node = $options.Output.Statements; Member = 'DirtyCommit'; Type = [string]; Path = './Output.Statements'; }
+    );
+
+    $checklist | ForEach-Object {
+      $this.verifyIsPresent($_.Node, $_.Member, $_.Type, $_.Path);
+    }    
+  }
+
+  [void] verifyIsPresent ([PSCustomObject]$node, [string]$member, [Type]$type, [string]$path) {
+    if ($null -ne $node.$member) {
+      if (-not($node.$member -is $type)) {
+        throw [System.Management.Automation.MethodInvocationException]::new(
+          $(
+            "ChangeLogOptionsManager.verifyIsPresent: error in options file" +
+            ", '$member' at '$path' is of wrong type, expected: " +
+            "'$($type)', found: '$($node.$member.GetType())'"
+          )
+        );
+      }
+    }
+    else {
+      throw [System.Management.Automation.MethodInvocationException]::new(
+        $(
+          "ChangeLogOptionsManager.verifyIsPresent: error in options file" +
+          ", missing '$member' at '$path'"
+        )
+      );
+    }
+  }
+
+  static [string] $DEFAULT_TEMPLATE = `
+    @"
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+[[warnings]]
+[[content]]
+[[links]]
+[[schema-version]]
+Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
+"@
+} # ChangeLogOptionsManager
+
+# === [ LineAppender ] =========================================================
+# Prevents 2 consecutive blank lines from being created in the string builder
+# and relieves the user from having to work out correct statement definitions
+# that avoids consecutive blanks lines which then go on to cause a markdown
+# warning.
+#
+class LineAppender {
+  hidden [System.Text.StringBuilder]$_builder;
+  hidden [string]$_previous = 'I Wish I Had Duck Feet';
+
+  LineAppender() {
+    $this._builder = [System.Text.StringBuilder]::new();
+  }
+
+  [void] AppendLine([string]$value) {
+    if (-not([string]::IsNullOrEmpty($this._previous) -and ([string]::IsNullOrEmpty($value)))) {
+      $this._builder.AppendLine($value);
+    }
+
+    $this._previous = $value;
+  }
+
+  [string] ToString() {
+    return $this._builder.ToString();
+  }
+}

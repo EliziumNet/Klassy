@@ -25,5 +25,8 @@ function New-ChangeLog {
   [MarkdownChangeLogGenerator]$generator = [MarkdownChangeLogGenerator]::new(
     $Options, $git, $grouper
   );
-  return [ChangeLog]::new($Options, $git, $grouper, $generator);
+  [ChangeLog]$instance = [ChangeLog]::new($Options, $git, $grouper, $generator);
+
+  $instance.Init();
+  return $instance;
 }
