@@ -1,31 +1,31 @@
 
-function New-ChangeLog {
+function New-PoShLog {
   <#
   .NAME
-    New-ChangeLog
+    New-PoShLog
 
   .SYNOPSIS
-    Create ChangeLog instance
+    Create PoShLog instance
 
   .DESCRIPTION
-    Factory function for ChangeLog instances.
+    Factory function for PoShLog instances.
 
   .LINK
     https://eliziumnet.github.io/klassy
 
   .PARAMETER Options
-    ChangeLog options
+    PoShLog options
   #>
-  [OutputType([ChangeLog])]
+  [OutputType([PoShLog])]
   param(
     [PSCustomObject]$Options
   )
   [SourceControl]$git = [Git]::new($Options);
   [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
-  [MarkdownChangeLogGenerator]$generator = [MarkdownChangeLogGenerator]::new(
+  [MarkdownPoShLogGenerator]$generator = [MarkdownPoShLogGenerator]::new(
     $Options, $git, $grouper
   );
-  [ChangeLog]$instance = [ChangeLog]::new($Options, $git, $grouper, $generator);
+  [PoShLog]$instance = [PoShLog]::new($Options, $git, $grouper, $generator);
 
   $instance.Init();
   return $instance;

@@ -1,7 +1,7 @@
 {
-  "$id": "https://github.com/EliziumNet/Klassy/blob/master/Elizium.Klassy/FileList/options-chog.schema.json",
+  "$id": "https://github.com/EliziumNet/Klassy/blob/master/Elizium.Klassy/FileList/posh-log.options.schema.json",
   "$schema": "http://json-schema.org/draft/2019-09/schema#",
-  "title": "Loopz Change Log Options json file schema",
+  "title": "Loopz PoSh Log Options json file schema",
   "version": "1.0.0",
   "definitions": {},
 

@@ -3,8 +3,8 @@
 #
 class SourceControl {
   [PSCustomObject]$Options;
-  hidden [PSCustomObject[]]$_allTagsWithHead;
-  hidden [PSCustomObject[]]$_allTagsWithoutHead;
+  [PSCustomObject[]]$AllTagsWithHead;
+  [PSCustomObject[]]$AllTagsWithoutHead;
   hidden [DateTime]$_headDate; # date of last commit
   hidden [DateTime]$_lastReleaseDate; # date of last release (can be null if no releases)
   static [int]$DEFAULT_COMMIT_ID_SIZE = 7;
@@ -16,10 +16,10 @@ class SourceControl {
 
   [void] Init([boolean]$descending) {
     [boolean]$includeHead = $true;
-    $this._allTagsWithHead = $this.ReadSortedTags($includeHead, $descending);
+    $this.AllTagsWithHead = $this.ReadSortedTags($includeHead, $descending);
 
     $includeHead = $false;
-    $this._allTagsWithoutHead = $this.ReadSortedTags($includeHead, $descending);
+    $this.AllTagsWithoutHead = $this.ReadSortedTags($includeHead, $descending);
 
     $this._commitIdSize = try {
       [int]$size = [int]::Parse($this.Options.SourceControl.CommitIdSize);
@@ -32,7 +32,7 @@ class SourceControl {
   }
 
   [PSCustomObject[]] GetSortedTags([boolean]$includeHead) {
-    return $includeHead ? $this._allTagsWithHead : $this._allTagsWithoutHead;
+    return $includeHead ? $this.AllTagsWithHead : $this.AllTagsWithoutHead;
   }
 
   [PSCustomObject[]] ReadGitTags([boolean]$includeHead) {
@@ -108,7 +108,7 @@ class SourceControl {
     return $from, $until;
   }
 
-  # Returns: [PSTypeName('Klassy.ChangeLog.TagInfo')][array]
+  # Returns: [PSTypeName('Klassy.PoShLog.TagInfo')][array]
   #
   [PSCustomObject[]] processTags ([PSCustomObject[]]$gitTags, [boolean]$includeHead) {
     [regex]$tagRegex = "(?<dt>[^\(]+)\(tag: (?<tag>[^\)]+)\)";
@@ -127,7 +127,7 @@ class SourceControl {
         [DateTime]$date = [DateTime]::Parse($dt)
 
         [PSCustomObject]$tagInfo = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.TagInfo';
+          PSTypeName = 'Klassy.PoShLog.TagInfo';
           Label      = $tag;
           Date       = $date;
         }
@@ -148,7 +148,7 @@ class SourceControl {
 
     if ($includeHead -and $this._headDate) {
       $result = $result += [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.TagInfo';
+        PSTypeName = 'Klassy.PoShLog.TagInfo';
         Label      = 'HEAD';
         Date       = $this._headDate;
       }
@@ -204,7 +204,7 @@ class Git : SourceControl {
     return $this.processTags($tags, $includeHead);
   } # ReadGitTags
 
-  # Returns: [PSTypeName('Klassy.ChangeLog.CommitInfo')][]
+  # Returns: [PSTypeName('Klassy.PoShLog.CommitInfo')][]
   #
   [PSCustomObject[]] ReadGitCommitsInRange(
     [string]$Format,
@@ -219,7 +219,7 @@ class Git : SourceControl {
 
     $result | Where-Object { $null -ne $_.CommitId } | ForEach-Object {
       Add-Member -InputObject $_ -PassThru -NotePropertyMembers @{
-        PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+        PSTypeName = 'Klassy.PoShLog.CommitInfo';
         FullHash   = $_.CommitId;
       }
     } | ForEach-Object {
@@ -243,9 +243,9 @@ class Git : SourceControl {
   }
 } # Git
 
-# === [ ChangeLog ] ============================================================
+# === [ PoShLog ] ============================================================
 #
-class ChangeLog {
+class PoShLog {
   [PSCustomObject]$Options;
   [SourceControl]$SourceControl;
   [boolean]$IsDescending;
@@ -254,12 +254,12 @@ class ChangeLog {
 
   hidden [regex]$_squashRegex;
   hidden [GroupBy]$_grouper;
-  hidden [ChangeLogGenerator]$_generator;
+  hidden [PoShLogGenerator]$_generator;
 
-  ChangeLog([PSCustomObject]$options,
+  PoShLog([PSCustomObject]$options,
     [SourceControl]$sourceControl,
     [GroupBy]$grouper,
-    [ChangeLogGenerator]$generator) {
+    [PoShLogGenerator]$generator) {
 
     $this.Options = $options;
     $this.SourceControl = $sourceControl;
@@ -279,7 +279,7 @@ class ChangeLog {
     }
 
     $sourceControl.Init($this.IsDescending);
-  } # ctor.ChangeLog
+  } # ctor.PoShLog
 
   [void] Init() {
     $this.AllTagsWithHead = $this.SourceControl.GetSortedTags($true);
@@ -289,7 +289,7 @@ class ChangeLog {
       if (-not($this.TagIsValid($this.Options.Selection.Tags.From))) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLog.Init: From tag '$($this.Options.Selection.Tags.From)'" +
+            "PoShLog.Init: From tag '$($this.Options.Selection.Tags.From)'" +
             " does not exist in this repo"
           )
         );
@@ -300,7 +300,7 @@ class ChangeLog {
       if (-not($this.TagIsValid($this.Options.Selection.Tags.Until))) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLog.Init: Until tag '$($this.Options.Selection.Tags.Until)'" +
+            "PoShLog.Init: Until tag '$($this.Options.Selection.Tags.Until)'" +
             " does not exist in this repo"
           )
         );
@@ -313,7 +313,7 @@ class ChangeLog {
           ))) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLog.Init: From tag: '$($this.Options.Selection.Tags.From)'" +
+            "PoShLog.Init: From tag: '$($this.Options.Selection.Tags.From)'" +
             " and Until tag: '$($this.Options.Selection.Tags.Until)'" +
             " have been specified the wrong way round. Swap the values and try again."
           )
@@ -329,7 +329,7 @@ class ChangeLog {
 
     if (($this.Options.Selection.Tags)?.Unreleased) {
       throw [System.Management.Automation.MethodInvocationException]::new(
-        $("ChangeLog.Init: From tag 'Unreleased' can not be specified with '$label'")
+        $("PoShLog.Init: From tag 'Unreleased' can not be specified with '$label'")
       );
     }
 
@@ -362,7 +362,7 @@ class ChangeLog {
     Set-Content -LiteralPath $fullPath -Value $content;
   }
 
-  # Return: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')][array]
+  # Return: [PSTypeName('Klassy.PoShLog.PartitionedRelease')][array]
   #
   [PSCustomObject[]] composePartitions() {
     [hashtable]$releases = $this.processCommits();
@@ -370,7 +370,7 @@ class ChangeLog {
     return $this._grouper.Partition($releases, $this.AllTagsWithHead);
   }
 
-  # Returns: ('Klassy.ChangeLog.CommitInfo')[]
+  # Returns: ('Klassy.PoShLog.CommitInfo')[]
   #
   [PSCustomObject[]] GetTagsInRange() {
     [scriptblock]$whereTagsInRange = if (($this.Options.Selection.Tags)?.From -and
@@ -426,7 +426,7 @@ class ChangeLog {
     return $result;
   } # GetTagsInRange
 
-  # Returned releases are a hashtable keyed by tag label => [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
+  # Returned releases are a hashtable keyed by tag label => [PSTypeName('Klassy.PoShLog.SquashedRelease')]
   #
   [hashtable] processCommits() {
 
@@ -530,7 +530,7 @@ class ChangeLog {
   # - Label: until tag label for the release
   # - Dirty: array of unfiltered commits; release contains commits all filtered out.
   #
-  # Returns: [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
+  # Returns: [PSTypeName('Klassy.PoShLog.SquashedRelease')]
   #
   [PSCustomObject] filterAndSquashCommits([array]$commitsInRange, [string]$untilLabel) {
     [array]$filtered = $this.filter($commitsInRange, $untilLabel);
@@ -579,7 +579,7 @@ class ChangeLog {
         }
       }
       [PSCustomObject]$release = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
+        PSTypeName = 'Klassy.PoShLog.SquashedRelease';
         Squashed   = $squashedHash;
         Commits    = $commitsWithoutIssueNo;
         Label      = $untilLabel;
@@ -588,7 +588,7 @@ class ChangeLog {
     }
     else {
       [PSCustomObject]$release = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
+        PSTypeName = 'Klassy.PoShLog.SquashedRelease';
         Commits    = $filtered;
         Label      = $untilLabel;
       }
@@ -605,7 +605,7 @@ class ChangeLog {
       # No commits for release
       #
       $result = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.SquashedRelease';
+        PSTypeName = 'Klassy.PoShLog.SquashedRelease';
         Dirty      = $commitsInRange;
         Label      = $untilLabel;
       };
@@ -639,7 +639,7 @@ class ChangeLog {
     }
     return $filtered;
   } # filter
-} # ChangeLog
+} # PoShLog
 
 # === [ GroupBy ] ==============================================================
 #
@@ -748,10 +748,10 @@ class GroupByImpl : GroupBy {
   # Resolves a path to a leaf. The leaf represents the bucket of commits resolved
   # to from the path.
   #
-  # $segmentInfo: [PSTypeName('Klassy.ChangeLog.SegmentInfo')]
-  # $partitionedRelease: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')]
-  # $handlers: [PSTypeName('Klassy.ChangeLog.Handler')]
-  # $custom: [PSTypeName('Klassy.ChangeLog.WalkInfo')]
+  # $segmentInfo: [PSTypeName('Klassy.PoShLog.SegmentInfo')]
+  # $partitionedRelease: [PSTypeName('Klassy.PoShLog.PartitionedRelease')]
+  # $handlers: [PSTypeName('Klassy.PoShLog.Handler')]
+  # $custom: [PSTypeName('Klassy.PoShLog.WalkInfo')]
   #
   [PSCustomObject[]] resolve(
     [PSCustomObject]$segmentInfo,
@@ -801,7 +801,7 @@ class GroupByImpl : GroupBy {
     return $commits;
   } # resolve
 
-  # Returns: [PSTypeName('Klassy.ChangeLog.SegmentInfo')]
+  # Returns: [PSTypeName('Klassy.PoShLog.SegmentInfo')]
   #
   [PSCustomObject] createSegmentInfo([string]$path) {
     [string[]]$legs = ($path -split '/') | Where-Object { $_ -ne $this._prefix; }
@@ -821,7 +821,7 @@ class GroupByImpl : GroupBy {
     [string]$decoratedPath = $decoratedSegments -join '/';
 
     [PSCustomObject]$segmentInfo = [PSCustomObject]@{
-      PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
+      PSTypeName    = 'Klassy.PoShLog.SegmentInfo';
       Path          = $path;
       Legs          = $legs;
       DecoratedPath = $decoratedPath;
@@ -839,9 +839,9 @@ class GroupByImpl : GroupBy {
 
   # A partitioned release contains Partitions and Tag members
   #
-  # $partitionedRelease: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')]
-  # $handlers: [PSTypeName('Klassy.ChangeLog.Handlers')]
-  # $custom: [PSTypeName('Klassy.ChangeLog.WalkInfo')]
+  # $partitionedRelease: [PSTypeName('Klassy.PoShLog.PartitionedRelease')]
+  # $handlers: [PSTypeName('Klassy.PoShLog.Handlers')]
+  # $custom: [PSTypeName('Klassy.PoShLog.WalkInfo')]
   #
   [void] Walk(
     [PSCustomObject]$partitionedRelease,
@@ -870,7 +870,7 @@ class GroupByImpl : GroupBy {
       }
 
       [PSCustomObject]$segmentInfo = [PSCustomObject]@{
-        PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
+        PSTypeName    = 'Klassy.PoShLog.SegmentInfo';
         #
         Path          = [string]::Empty;
         DecoratedPath = [string]::Empty;
@@ -881,7 +881,7 @@ class GroupByImpl : GroupBy {
 
     if (($cleanCount -eq 0) -and $partitions.ContainsKey($this._dirty)) {
       [PSCustomObject]$segmentInfo = [PSCustomObject]@{
-        PSTypeName    = 'Klassy.ChangeLog.SegmentInfo';
+        PSTypeName    = 'Klassy.PoShLog.SegmentInfo';
         #
         Path          = [string]::Empty;
         DecoratedPath = [string]::Empty;
@@ -941,7 +941,7 @@ class GroupByImpl : GroupBy {
     }
 
     [PSCustomObject]$result = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.IsaLookup';
+      PSTypeName = 'Klassy.PoShLog.IsaLookup';
       #
       Values     = $values;
       Overrides  = $overrides;
@@ -955,9 +955,9 @@ class GroupByImpl : GroupBy {
   # if it's in a hash. So, we need an array. Partition will return an array of
   # PSCustomObjects containing fields: Tag, Partitions and Paths.
   #
-  # $sortedTags: [PSTypeName('Klassy.ChangeLog.TagInfo')]
+  # $sortedTags: [PSTypeName('Klassy.PoShLog.TagInfo')]
   #
-  # Returns: [PSTypeName('Klassy.ChangeLog.PartitionedRelease')][array]
+  # Returns: [PSTypeName('Klassy.PoShLog.PartitionedRelease')][array]
   #
   [PSCustomObject[]] Partition([hashtable]$releases, [PSCustomObject[]]$sortedTags) {
 
@@ -1013,14 +1013,14 @@ class GroupByImpl : GroupBy {
             [System.Text.RegularExpressions.MatchCollection]$mc = $partitionRegex.Matches($com.Subject);
             [System.Text.RegularExpressions.GroupCollection]$groups = $mc[0].Groups;
 
-            [ChangeLogSchema]::GetSegments($this._segments) | ForEach-Object {
+            [PoShLogProfile]::GetSegments($this._segments) | ForEach-Object {
               if ($groups.ContainsKey($_) ) {
                 # Exception override for break, the '!' is not a very useful
                 # value, so translate to something more explicit.
                 #
                 $selectors[$_] = if ($_ -eq 'break') {
                   ([string]::IsNullOrEmpty($groups[$_]) -and -not($groups[$_].Success)) ? `
-                    [ChangeLogSchema]::NON_BREAKING : [ChangeLogSchema]::BREAKING;
+                    [PoShLogProfile]::NON_BREAKING : [PoShLogProfile]::BREAKING;
                 }
                 elseif ($_ -eq 'scope') {
                   [string]$scope = $groups[$_].Value;
@@ -1056,7 +1056,7 @@ class GroupByImpl : GroupBy {
             }
 
             $com.Info = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Selectors  = $selectors;
               IsBreaking = $($groups.ContainsKey('break') -and $groups['break'].Success);
               Groups     = $groups;
@@ -1112,7 +1112,7 @@ class GroupByImpl : GroupBy {
         $paths = $($paths | Sort-Object | Get-Unique);
 
         $partitionItem = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.PartitionedRelease';
+          PSTypeName = 'Klassy.PoShLog.PartitionedRelease';
           Tag        = $tag;
           Partitions = $partitions;
           Paths      = $paths;
@@ -1128,9 +1128,9 @@ class GroupByImpl : GroupBy {
     return $partitioned;
   } # Partition
 
-  # $squashedRelease: [PSTypeName('Klassy.ChangeLog.SquashedRelease')]
+  # $squashedRelease: [PSTypeName('Klassy.PoShLog.SquashedRelease')]
   #
-  # Returns: [PSTypeName('Klassy.ChangeLog.CommitInfo')][array]
+  # Returns: [PSTypeName('Klassy.PoShLog.CommitInfo')][array]
   #
   [PSCustomObject[]] flatten([PSCustomObject]$squashedRelease) {
 
@@ -1203,15 +1203,15 @@ class GroupByImpl : GroupBy {
   } # CountCommits
 } # GroupByImpl
 
-# === [ ChangeLogGenerator ] ===================================================
+# === [ PoShLogGenerator ] ===================================================
 #
-class ChangeLogGenerator {
+class PoShLogGenerator {
   [PSCustomObject]$Options;
   [SourceControl]$_sourceControl;
   [GroupBy]$_grouper;
   [string]$_baseUrl;
 
-  ChangeLogGenerator([PSCustomObject]$options, [SourceControl]$sourceControl, [GroupBy]$grouper) {
+  PoShLogGenerator([PSCustomObject]$options, [SourceControl]$sourceControl, [GroupBy]$grouper) {
     $this.Options = $options;
     $this._sourceControl = $sourceControl;
     $this._grouper = $grouper;
@@ -1220,27 +1220,27 @@ class ChangeLogGenerator {
 
   [void] SetDescending([boolean]$value) {
     throw [System.Management.Automation.MethodInvocationException]::new(
-      'Abstract method not implemented (ChangeLogGenerator.SetDescending)');
+      'Abstract method not implemented (PoShLogGenerator.SetDescending)');
   }
 
   [string] Generate([PSCustomObject[]]$releases, [object]$template, [PSCustomObject[]]$tagsInRange) {
     throw [System.Management.Automation.MethodInvocationException]::new(
-      'Abstract method not implemented (ChangeLogGenerator.Generate)');
+      'Abstract method not implemented (PoShLogGenerator.Generate)');
   }
 }
 
-# === [ MarkdownChangeLogGenerator ] ===========================================
+# === [ MarkdownPoShLogGenerator ] ===========================================
 #
-class MarkdownChangeLogGenerator : ChangeLogGenerator {
+class MarkdownPoShLogGenerator : PoShLogGenerator {
   [GeneratorUtils]$_utils;
   [boolean]$IsDescending = $true;
 
-  MarkdownChangeLogGenerator(
+  MarkdownPoShLogGenerator(
     [PSCustomObject]$options, [SourceControl]$sourceControl, [GroupBy]$grouper
   ): base ($options, $sourceControl, $grouper) {
 
     [PSCustomObject]$generatorInfo = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.GeneratorInfo';
+      PSTypeName = 'Klassy.PoShLog.GeneratorInfo';
       #
       BaseUrl    = $this._baseUrl;
     }
@@ -1256,11 +1256,11 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
 
     [scriptblock]$OnCommit = {
       param(
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.CommitInfo')]$commit,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.CommitInfo')]$commit,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.TagInfo')]$tagInfo,
         [GeneratorUtils]$utils,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
       )
       [PSCustomObject]$output = $custom.Options.Output;
 
@@ -1274,10 +1274,10 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
 
     [scriptblock]$OnEndBucket = {
       param(
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.TagInfo')]$tagInfo,
         [GeneratorUtils]$utils,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
       )
       [PSCustomObject]$output = $custom.Options.Output;
 
@@ -1291,10 +1291,10 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
       param(
         [string]$headingType,
         [string]$headingStmt,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$tagInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$tagInfo,
         [GeneratorUtils]$utils,
-        [System.Management.Automation.PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
       )
       [string]$prefix = [GeneratorUtils]::HeadingPrefix($headingType);
       if (-not($headingStmt.StartsWith($prefix))) {
@@ -1314,7 +1314,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     } # OnHeading
 
     [PSCustomObject]$handlers = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.Handlers';
+      PSTypeName = 'Klassy.PoShLog.Handlers';
       #
       Utils      = $this._utils;
     }
@@ -1338,7 +1338,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     }
 
     [PSCustomObject]$customWalkInfo = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.WalkInfo';
+      PSTypeName = 'Klassy.PoShLog.WalkInfo';
       #
       Appender   = $appender;
       Options    = $this.Options;
@@ -1355,7 +1355,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     }
 
     [PSCustomObject[]]$linkTags = $this._utils.GetLinkTags(
-      $tagsInRange, $this._sourceControl._allTagsWithoutHead
+      $tagsInRange, $this._sourceControl.AllTagsWithoutHead
     );
     [string]$linksContent = $this.CreateComparisonLinks($linkTags);
     [string]$warningsContent = $this.CreateDisabledWarnings();
@@ -1370,7 +1370,7 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
     [string]$markdown = $template;
     foreach ($const in $constituents) {
       $markdown = $markdown.replace(
-        $([ChangeLogSchema]::MD_CONTENT_FORMAT -f $const.Name), $const.Content
+        $([PoShLogProfile]::MD_CONTENT_FORMAT -f $const.Name), $const.Content
       );
     }
 
@@ -1434,18 +1434,18 @@ class MarkdownChangeLogGenerator : ChangeLogGenerator {
   }
 
   [string] CreateSchemaVersion() {
-    return $("<!-- Elizium.Loopz ChangeLog options json schema version '{0}' -->" -f [ChangeLogSchema]::SCHEMA_VERSION);
+    return $("<!-- Elizium.Loopz PoShLog options json schema version '{0}' -->" -f [PoShLogProfile]::SCHEMA_VERSION);
   }
-} # MarkdownChangeLogGenerator
+} # MarkdownPoShLogGenerator
 
-# === [ ChangeLogSchema ] ======================================================
+# === [ PoShLogProfile ] ======================================================
 #
 # conditional -> ?{var;name}
 
-class ChangeLogSchema {
+class PoShLogProfile {
   static [string]$PREFIXES = '?!&^*+';
   static [regex]$FieldRegex = [regex]::new(
-    "(?<prefix>[$([ChangeLogSchema]::PREFIXES)])\{(?:(?<var>[\w\-]+);)?(?<symbol>[\w\-]+)(?:;(?<else>[\w\-]+))?\}"
+    "(?<prefix>[$([PoShLogProfile]::PREFIXES)])\{(?:(?<var>[\w\-]+);)?(?<symbol>[\w\-]+)(?:;(?<else>[\w\-]+))?\}"
   );
   static [string] Snippet([char]$prefix, [string]$symbol) {
     return "$($prefix){$($symbol)}";
@@ -1464,16 +1464,16 @@ class ChangeLogSchema {
   static [string]$LOOKUP_UNKNOWN = '?';
 
   static [string] StatementPlaceholder() {
-    return [ChangeLogSchema]::Snippet('*', '$');
+    return [PoShLogProfile]::Snippet('*', '$');
   }
   static [string]$MD_CONTENT_FORMAT = "[[{0}]]";
   static [string]$TEMPLATE_FILENAME = "TEMPLATE.md";
 
-  static [string]$OPTIONS_SCHEMA_FILENAME = 'change-log.options.schema.json';
+  static [string]$OPTIONS_SCHEMA_FILENAME = 'posh-log.options.schema.json';
   static [string]$SCHEMA_VERSION = '1.0.0';
 
   static [string]$DIRECTORY = '.loopz';
-} # ChangeLogSchema
+} # PoShLogProfile
 
 # === [ GeneratorUtils ] =======================================================
 #
@@ -1494,31 +1494,31 @@ class GeneratorUtils {
 
   static [hashtable]$_lookups = @{
     '_A' = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.PoShLog.GeneratorUtils.Lookup';
       Instance   = 'Authors';
       Variable   = 'author';
     };
 
     '_B' = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.PoShLog.GeneratorUtils.Lookup';
       Instance   = 'BreakingStatus';
       Variable   = 'break';
     };
 
     '_C' = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.PoShLog.GeneratorUtils.Lookup';
       Instance   = 'ChangeTypes';
       Variable   = 'change';
     };
 
     '_S' = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.PoShLog.GeneratorUtils.Lookup';
       Instance   = 'Scopes';
       Variable   = 'scope';
     };
 
     '_T' = [PSCustomObject]@{
-      PSTypeName = 'Klassy.ChangeLog.GeneratorUtils.Lookup';
+      PSTypeName = 'Klassy.PoShLog.GeneratorUtils.Lookup';
       Instance   = 'Types';
       Variable   = 'type';
     };
@@ -1531,33 +1531,33 @@ class GeneratorUtils {
   }
 
   static [string] ConditionalSnippet([string]$value) {
-    return [ChangeLogSchema]::Snippet('?', $value)
+    return [PoShLogProfile]::Snippet('?', $value)
   }
 
   static [string] ConditionalVariableSnippet([string]$var, [string]$value, [string]$else) {
     return [string]::IsNullOrEmpty($else) ? `
-      [ChangeLogSchema]::Snippet('?', "$($var);$($value)") : `
-      [ChangeLogSchema]::Snippet('?', "$($var);$($value);$($else)");
+      [PoShLogProfile]::Snippet('?', "$($var);$($value)") : `
+      [PoShLogProfile]::Snippet('?', "$($var);$($value);$($else)");
   }
 
   static [string] LiteralSnippet([string]$value) {
-    return [ChangeLogSchema]::Snippet('!', $value)
+    return [PoShLogProfile]::Snippet('!', $value)
   }
 
   static [string] LookupSnippet([string]$value) {
-    return [ChangeLogSchema]::Snippet('&', $value)
+    return [PoShLogProfile]::Snippet('&', $value)
   }
 
   static [string] NamedGroupRefSnippet([string]$value) {
-    return [ChangeLogSchema]::Snippet('^', $value)
+    return [PoShLogProfile]::Snippet('^', $value)
   }
 
   static [string] StatementSnippet([string]$value) {
-    return [ChangeLogSchema]::Snippet('*', $value)
+    return [PoShLogProfile]::Snippet('*', $value)
   }
 
   static [string] VariableSnippet([string]$value) {
-    return [ChangeLogSchema]::Snippet('+', $value)
+    return [PoShLogProfile]::Snippet('+', $value)
   }
 
   static [string] HeadingPrefix([string]$headingType) {
@@ -1567,7 +1567,7 @@ class GeneratorUtils {
 
   static [string] AnySnippetExpression($value) {
     [string]$escaped = [regex]::Escape("{$value}");
-    return "(?:[$([ChangeLogSchema]::PREFIXES)])$($escaped)";
+    return "(?:[$([PoShLogProfile]::PREFIXES)])$($escaped)";
   }
 
   static [string] TagDisplayName([string]$label) {
@@ -1693,7 +1693,7 @@ class GeneratorUtils {
       $headingVariables['active-leg'] = $segmentInfo.ActiveLeg;
       $headingVariables['active-segment'] = $segmentInfo.ActiveSegment;
 
-      [ChangeLogSchema]::GetSegments($this._segments) | ForEach-Object {
+      [PoShLogProfile]::GetSegments($this._segments) | ForEach-Object {
         if (${segmentInfo}?.$_) {
           $headingVariables[$_] = $segmentInfo.$_;
         }
@@ -1727,7 +1727,7 @@ class GeneratorUtils {
     }
 
     if (${commit}?.Info) {
-      [ChangeLogSchema]::GetSegments($this._segments) | ForEach-Object {
+      [PoShLogProfile]::GetSegments($this._segments) | ForEach-Object {
         if ($commit.Info.Selectors.ContainsKey($_)) {
           $commitVariables[$_] = $commit.Info.Selectors[$_];
         }
@@ -1784,8 +1784,8 @@ class GeneratorUtils {
     [hashtable]$variables,
     [string[]]$trail) {
 
-    [string]$result = if ([ChangeLogSchema]::FieldRegex.IsMatch($source)) {
-      [System.Text.RegularExpressions.MatchCollection]$mc = [ChangeLogSchema]::FieldRegex.Matches($source);
+    [string]$result = if ([PoShLogProfile]::FieldRegex.IsMatch($source)) {
+      [System.Text.RegularExpressions.MatchCollection]$mc = [PoShLogProfile]::FieldRegex.Matches($source);
 
       [string]$evolve = $source;
       foreach ($m in $mc) {
@@ -1947,19 +1947,19 @@ class GeneratorUtils {
   } # evaluateStmt
 
   [string] ClearUnresolvedFields($value) {
-    return [ChangeLogSchema]::FieldRegex.Replace($value, '');
+    return [PoShLogProfile]::FieldRegex.Replace($value, '');
   }
 } # GeneratorUtils
 
-# === [ ChangeLogOptionsManager ] ==============================================
+# === [ PoShLogOptionsManager ] ==============================================
 #
-class ChangeLogOptionsManager {
+class PoShLogOptionsManager {
   [PSCustomObject]$OptionsInfo;
   [boolean]$Found;
 
   hidden [PSCustomObject]$_proxyGit;
 
-  ChangeLogOptionsManager([PSCustomObject]$optionsInfo) {
+  PoShLogOptionsManager([PSCustomObject]$optionsInfo) {
     $this.OptionsInfo = $optionsInfo;
   }
 
@@ -1968,7 +1968,7 @@ class ChangeLogOptionsManager {
   # - DirectoryName
   # - GroupBy
   #
-  ChangeLogOptionsManager([PSCustomObject]$proxyGit, [PSCustomObject]$optionsInfo) {
+  PoShLogOptionsManager([PSCustomObject]$proxyGit, [PSCustomObject]$optionsInfo) {
 
     $this._proxyGit = $proxyGit;
     $this.OptionsInfo = $optionsInfo;
@@ -2041,7 +2041,7 @@ class ChangeLogOptionsManager {
     [PSCustomObject]$options = if (Test-Path -LiteralPath $fullPath) {
       [string]$json = Get-Content -LiteralPath $fullPath;
       [string]$schemaPath = Join-Path -Path $PSScriptRoot `
-        -ChildPath $([ChangeLogSchema]::OPTIONS_SCHEMA_FILENAME);
+        -ChildPath $([PoShLogProfile]::OPTIONS_SCHEMA_FILENAME);
       $null = Test-Json -Json $json -SchemaFile $schemaPath;
 
       $temp = $($json | ConvertFrom-Json -Depth 20);
@@ -2106,23 +2106,23 @@ class ChangeLogOptionsManager {
   }
 
   [object] Template() {
-    [string]$templateName = [ChangeLogSchema]::TEMPLATE_FILENAME;
+    [string]$templateName = [PoShLogProfile]::TEMPLATE_FILENAME;
     [string]$templatePath = $this.DirectoryPath($templateName);
 
     [object]$content = if (Test-Path -LiteralPath $templatePath) {
       Get-Content -LiteralPath $templatePath -Raw;
     }
     else {
-      Set-Content -LiteralPath $templatePath -Value $([ChangeLogOptionsManager]::DEFAULT_TEMPLATE);
-      [ChangeLogOptionsManager]::DEFAULT_TEMPLATE;
+      Set-Content -LiteralPath $templatePath -Value $([PoShLogOptionsManager]::DEFAULT_TEMPLATE);
+      [PoShLogOptionsManager]::DEFAULT_TEMPLATE;
     }
 
-    [string]$format = [ChangeLogSchema]::MD_CONTENT_FORMAT;
+    [string]$format = [PoShLogProfile]::MD_CONTENT_FORMAT;
     'warnings', 'content', 'links', 'schema-version' | Foreach-Object {
       if (-not($content.ToString().Contains($($format -f $_)))) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLogOptionsManager.Template: error in template file ($($templateName))" +
+            "PoShLogOptionsManager.Template: error in template file ($($templateName))" +
             ", missing '$($_)' placeholder"
           )
         );
@@ -2148,7 +2148,7 @@ class ChangeLogOptionsManager {
     }
 
     return $($null -eq ($segments | Where-Object {
-          [ChangeLogSchema]::GetSegments($this._segments) -notContains $_;
+          [PoShLogProfile]::GetSegments($this._segments) -notContains $_;
         }))
   }
 
@@ -2173,16 +2173,16 @@ class ChangeLogOptionsManager {
   }
 
   [PSCustomObject] NewOptions([string]$name, [boolean]$ifEmoji) {
-    [string]$defaultHeadingStmt = [ChangeLogSchema]::StatementPlaceholder();
+    [string]$defaultHeadingStmt = [PoShLogProfile]::StatementPlaceholder();
 
     [PSCustomObject]$skeleton = [PSCustomObject]@{
-      PSTypeName    = 'Klassy.ChangeLog.Options';
+      PSTypeName    = 'Klassy.PoShLog.Options';
       #
       Snippet       = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.Options.Snippet';
+        PSTypeName = 'Klassy.PoShLog.Options.Snippet';
         #
         Prefix     = [PSCustomObject]@{
-          PSTypeName    = 'Klassy.ChangeLog.Options.Snippet.Prefix';
+          PSTypeName    = 'Klassy.PoShLog.Options.Snippet.Prefix';
           #
           Conditional   = '?'; # breakStmt
           Literal       = '!'; # Anything in Output.Literals
@@ -2194,14 +2194,14 @@ class ChangeLogOptionsManager {
       } # Snippet
 
       Selection     = [PSCustomObject]@{
-        PSTypeName          = 'Klassy.ChangeLog.Options.Selection';
+        PSTypeName          = 'Klassy.PoShLog.Options.Selection';
         #
         Order               = 'desc';
         SquashBy            = '#(?<issue>\d{1,6})'; # optional field
         Last                = $true;
         IncludeMissingIssue = $true;
         Subject             = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Selection.Subject';
+          PSTypeName = 'Klassy.PoShLog.Options.Selection.Subject';
           #
           Include    = @(
             # feat(foo)!: Add new bar (#42)
@@ -2230,7 +2230,7 @@ class ChangeLogOptionsManager {
         }
 
         Tags                = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Selection.Tags';
+          PSTypeName = 'Klassy.PoShLog.Options.Selection.Tags';
           #
           # FROM, commits that come after the TAG
           # UNTIL, commits up to and including TAG
@@ -2243,7 +2243,7 @@ class ChangeLogOptionsManager {
       } # Selection
 
       SourceControl = [PSCustomObject]@{
-        PSTypeName   = 'Klassy.ChangeLog.Options.SourceControl';
+        PSTypeName   = 'Klassy.PoShLog.Options.SourceControl';
         #
         Service      = 'GitHub';
         HostUrl      = 'https://github.com/';
@@ -2252,7 +2252,7 @@ class ChangeLogOptionsManager {
       } # SourceControl
 
       Output        = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.Options.Output';
+        PSTypeName = 'Klassy.PoShLog.Options.Output';
         #
         # special variables:
         # -> &{_A} = author => indexes into the Authors hash
@@ -2262,7 +2262,7 @@ class ChangeLogOptionsManager {
         # -> &{_T} = type => indexes into the Types hash
         #
         Headings   = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Output.Headings';
+          PSTypeName = 'Klassy.PoShLog.Options.Output.Headings';
           #
           H2         = 'Release [+{display-tag}] / +{date}';
           H3         = $defaultHeadingStmt;
@@ -2275,7 +2275,7 @@ class ChangeLogOptionsManager {
         GroupBy    = 'scope/type/change/break';
 
         LookUp     = [PSCustomObject]@{ # => '&'
-          PSTypeName     = 'Klassy.ChangeLog.Options.Output.Lookup';
+          PSTypeName     = 'Klassy.PoShLog.Options.Output.Lookup';
           #
           # => &{_A} ('_A' is a synonym of 'author')
           #
@@ -2334,7 +2334,7 @@ class ChangeLogOptionsManager {
         } # Lookup
 
         Literals   = [PSCustomObject]@{ # => '!'
-          PSTypeName    = 'Klassy.ChangeLog.Options.Output.Literals';
+          PSTypeName    = 'Klassy.PoShLog.Options.Output.Literals';
           #
           Broken        = $this.useEmoji($ifEmoji, ':warning:', 'break');
           BucketEnd     = '---';
@@ -2344,7 +2344,7 @@ class ChangeLogOptionsManager {
         } # Literals
 
         Statements = [PSCustomObject]@{ # => '*'
-          PSTypeName   = 'Klassy.ChangeLog.Options.Output.Statements';
+          PSTypeName   = 'Klassy.PoShLog.Options.Output.Statements';
           #
           # These are overwritten but specified here as a reference to all
           # valid fields.
@@ -2369,7 +2369,7 @@ class ChangeLogOptionsManager {
         } # Statements
 
         Warnings   = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Output.Warnings';
+          PSTypeName = 'Klassy.PoShLog.Options.Output.Warnings';
           Disable    = @{
             'MD013' = 'line-length';
             'MD024' = 'no-duplicate-heading/no-duplicate-header';
@@ -2455,12 +2455,12 @@ class ChangeLogOptionsManager {
   [string] injectSegment([string]$headingStatement, [string]$headingType,
     [string]$groupByValue, [string]$otherwise) {
 
-    [string]$placeholder = [ChangeLogSchema]::StatementPlaceholder();
+    [string]$placeholder = [PoShLogProfile]::StatementPlaceholder();
 
     if (-not($headingStatement.Contains($placeholder))) {
       throw [System.Management.Automation.MethodInvocationException]::new(
         $(
-          "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+          "PoShLogOptionsManager.restoreTypeName: error in options file" +
           ", header-$($headingType) ($headingStatement) is missing statement placeholder ($placeholder)"
         )
       );
@@ -2476,7 +2476,7 @@ class ChangeLogOptionsManager {
     #
     [string]$heading = if ($segments -and ($segments.Count -gt 0)) {
       if ($segments.Count -eq 1) {
-        [ChangeLogSchema]::Snippet('*', $($segments[0] + 'Stmt'));
+        [PoShLogProfile]::Snippet('*', $($segments[0] + 'Stmt'));
       }
       else {
         # eg:
@@ -2489,7 +2489,7 @@ class ChangeLogOptionsManager {
           [int]$index = $($headingNumeral - 3);
 
           if ($index -lt $segments.Count) {
-            [ChangeLogSchema]::Snippet(
+            [PoShLogProfile]::Snippet(
               '*', $($segments[$($headingNumeral - 3)] + 'Stmt')
             );
           }
@@ -2532,7 +2532,7 @@ class ChangeLogOptionsManager {
     else {
       throw [System.Management.Automation.MethodInvocationException]::new(
         $(
-          "ChangeLogOptionsManager.restoreTypes: error in options file" +
+          "PoShLogOptionsManager.restoreTypes: error in options file" +
           ", missing 'Output' entry"
         )
       );
@@ -2543,7 +2543,7 @@ class ChangeLogOptionsManager {
     if (${output}?.Lookup -and (-not($output.Lookup -is [PSCustomObject]))) {
       throw [System.Management.Automation.MethodInvocationException]::new(
         $(
-          "ChangeLogOptionsManager.restoreTypes: error in options file" +
+          "PoShLogOptionsManager.restoreTypes: error in options file" +
           ", Output.Lookup is not an object (type: '$($output.Lookup.GetType())')"
         )
       );
@@ -2565,19 +2565,19 @@ class ChangeLogOptionsManager {
       if (-not($node -is [PSCustomObject])) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+            "PoShLogOptionsManager.restoreTypeName: error in options file" +
             ", item at path: '$path' is not an object"
           )
         );
       }
 
       if ($null -ne $node) {
-        $node.PSObject.TypeNames.Insert(0, "Klassy.ChangeLog.$path");
+        $node.PSObject.TypeNames.Insert(0, "Klassy.PoShLog.$path");
       }
       else {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+            "PoShLogOptionsManager.restoreTypeName: error in options file" +
             ", missing entry at: '$path'"
           )
         );
@@ -2586,7 +2586,7 @@ class ChangeLogOptionsManager {
     catch {
       throw [System.Management.Automation.MethodInvocationException]::new(
         $(
-          "ChangeLogOptionsManager.restoreTypeName: failed to restore type for '$path'" +
+          "PoShLogOptionsManager.restoreTypeName: failed to restore type for '$path'" +
           ", error in options file."
         )
       );
@@ -2605,7 +2605,7 @@ class ChangeLogOptionsManager {
       if (-not($node -is [PSCustomObject])) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLogOptionsManager.restoreTypeName: error in options file" +
+            "PoShLogOptionsManager.restoreTypeName: error in options file" +
             ", item '$name' is not an object"
           )
         );
@@ -2621,11 +2621,11 @@ class ChangeLogOptionsManager {
         $node.$name = $hash;
 
         if ($withDefaultCheck) {
-          if (-not($hash.ContainsKey([ChangeLogSchema]::LOOKUP_UNKNOWN))) {
+          if (-not($hash.ContainsKey([PoShLogProfile]::LOOKUP_UNKNOWN))) {
             throw [System.Management.Automation.MethodInvocationException]::new(
               $(
-                "ChangeLogOptionsManager.repairHashTable: error in options file" +
-                ", '$([ChangeLogSchema]::LOOKUP_UNKNOWN)' entry for: '$name'"
+                "PoShLogOptionsManager.repairHashTable: error in options file" +
+                ", '$([PoShLogProfile]::LOOKUP_UNKNOWN)' entry for: '$name'"
               )
             );
           }
@@ -2634,7 +2634,7 @@ class ChangeLogOptionsManager {
       else {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLogOptionsManager.repairHashTable: error in options file" +
+            "PoShLogOptionsManager.repairHashTable: error in options file" +
             ", entry for: '$name' is not an object (type: '$($node.$name.GetType())')"
           )
         ); 
@@ -2643,7 +2643,7 @@ class ChangeLogOptionsManager {
     else {
       throw [System.Management.Automation.MethodInvocationException]::new(
         $(
-          "ChangeLogOptionsManager.repairHashTable: error in options file" +
+          "PoShLogOptionsManager.repairHashTable: error in options file" +
           ", missing hashtable entry for: '$name'"
         )
       );
@@ -2681,7 +2681,7 @@ class ChangeLogOptionsManager {
       if (-not($node.$member -is $type)) {
         throw [System.Management.Automation.MethodInvocationException]::new(
           $(
-            "ChangeLogOptionsManager.verifyIsPresent: error in options file" +
+            "PoShLogOptionsManager.verifyIsPresent: error in options file" +
             ", '$member' at '$path' is of wrong type, expected: " +
             "'$($type)', found: '$($node.$member.GetType())'"
           )
@@ -2691,7 +2691,7 @@ class ChangeLogOptionsManager {
     else {
       throw [System.Management.Automation.MethodInvocationException]::new(
         $(
-          "ChangeLogOptionsManager.verifyIsPresent: error in options file" +
+          "PoShLogOptionsManager.verifyIsPresent: error in options file" +
           ", missing '$member' at '$path'"
         )
       );
@@ -2712,7 +2712,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [[schema-version]]
 Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
 "@
-} # ChangeLogOptionsManager
+} # PoShLogOptionsManager
 
 # === [ LineAppender ] =========================================================
 # Prevents 2 consecutive blank lines from being created in the string builder
