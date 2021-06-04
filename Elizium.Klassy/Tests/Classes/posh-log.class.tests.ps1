@@ -2,7 +2,7 @@
 
 Set-StrictMode -Version 1.0
 
-Describe 'ChangeLog' -Tag 'chog' {
+Describe 'PoShLog' -Tag 'chog' {
   BeforeAll {
     Get-Module Elizium.Klassy | Remove-Module
     Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1 `
@@ -60,13 +60,13 @@ Describe 'ChangeLog' -Tag 'chog' {
       # {_X}: lookup value in 'Output' hash
       #
       [PSCustomObject]$script:_options = [PSCustomObject]@{
-        PSTypeName    = 'Klassy.ChangeLog.Options';
+        PSTypeName    = 'Klassy.PoShLog.Options';
         #
         Snippet       = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Snippet';
+          PSTypeName = 'Klassy.PoShLog.Options.Snippet';
           #
           Prefix     = [PSCustomObject]@{
-            PSTypeName    = 'Klassy.ChangeLog.Options.Snippet.Prefix';
+            PSTypeName    = 'Klassy.PoShLog.Options.Snippet.Prefix';
             #
             Conditional   = '?'; # breakStmt
             Literal       = '!'; # Anything in Output.Literals
@@ -77,21 +77,21 @@ Describe 'ChangeLog' -Tag 'chog' {
           }
         }
         Selection     = [PSCustomObject]@{
-          PSTypeName          = 'Klassy.ChangeLog.Options.Selection';
+          PSTypeName          = 'Klassy.PoShLog.Options.Selection';
           #
           Order               = 'desc';
           SquashBy            = '#(?<issue>\d{1,6})'; # optional field
           Last                = $true;
           IncludeMissingIssue = $true;
           Subject             = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.Options.Selection.Subject';
+            PSTypeName = 'Klassy.PoShLog.Options.Selection.Subject';
             #
             Include    = $_includes;
             Exclude    = $_excludes;
             Change     = '^[\w]+'; # only applied if the matching include not include 'change' named group
           }
           Tags                = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.Options.Selection.Tags';
+            PSTypeName = 'Klassy.PoShLog.Options.Selection.Tags';
             # FROM, commits that come after the TAG
             # UNTIL, commits up to and including TAG
             #
@@ -102,7 +102,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           }
         }
         SourceControl = [PSCustomObject]@{
-          PSTypeName   = 'Klassy.ChangeLog.Options.SourceControl';
+          PSTypeName   = 'Klassy.PoShLog.Options.SourceControl';
           #
           Name         = 'GitHub';
           HostUrl      = 'https://github.com/';
@@ -110,7 +110,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           CommitIdSize = 7;
         }
         Output        = [PSCustomObject]@{
-          PSTypeName = 'Klassy.ChangeLog.Options.Output';
+          PSTypeName = 'Klassy.PoShLog.Options.Output';
           #
           # special variables:
           # -> &{_A} = change => indexes into the Authors hash
@@ -120,7 +120,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           # -> &{_T} = type => indexes into the Types hash
           #
           Headings   = [PSCustomObject]@{ # document headings
-            PSTypeName = 'Klassy.ChangeLog.Options.Output.Headings';
+            PSTypeName = 'Klassy.PoShLog.Options.Output.Headings';
             #
             H2         = 'Release [+{display-tag}] / +{date}';
             H3         = '*{$}'; # *{$} is translated into the correct statement from groupBy
@@ -139,7 +139,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           GroupBy    = 'scope/type/break/change';
 
           LookUp     = [PSCustomObject]@{ # => '&'
-            PSTypeName     = 'Klassy.ChangeLog.Options.Output.Lookup';
+            PSTypeName     = 'Klassy.PoShLog.Options.Output.Lookup';
             #
             # => &{_A} ('_A' is a synonym of 'author')
             #
@@ -202,7 +202,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             }
           }
           Literals   = [PSCustomObject]@{ # => '!'
-            PSTypeName    = 'Klassy.ChangeLog.Options.Output.Literals';
+            PSTypeName    = 'Klassy.PoShLog.Options.Output.Literals';
             #
             Broken        = ':warning:';
             NotBroken     = ':recycle:';
@@ -212,7 +212,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             Uncategorised = 'uncategorised';
           }
           Statements = [PSCustomObject]@{ # => '*'
-            PSTypeName  = 'Klassy.ChangeLog.Options.Output.Statements';
+            PSTypeName  = 'Klassy.PoShLog.Options.Output.Statements';
             #
             ActiveScope = "+{scope}";
             Author      = ' by `@+{author}` &{_A}'; # &{_A}: Author, +{avatar}: git-avatar
@@ -232,7 +232,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             Ungrouped   = "UNGROUPED!";
           }
           Warnings   = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.Options.Output.Warnings';
+            PSTypeName = 'Klassy.PoShLog.Options.Output.Warnings';
             Disable    = @{
               'MD253' = 'line-length';
               'MD024' = 'no-duplicate-heading/no-duplicate-header';
@@ -246,7 +246,7 @@ Describe 'ChangeLog' -Tag 'chog' {
       } # $_options
 
       [PSCustomObject]$script:_head = [PSCustomObject]@{
-        PSTypeName = 'Klassy.ChangeLog.TagInfo';
+        PSTypeName = 'Klassy.PoShLog.TagInfo';
         Label      = 'HEAD';
         Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
       }
@@ -277,7 +277,7 @@ Describe 'ChangeLog' -Tag 'chog' {
               @('1.0.0', ([DateTime]::Parse('2020-08-18 14:44:59 +0100')))
             ) | ForEach-Object {
               [PSCustomObject]@{
-                PSTypeName = 'Klassy.ChangeLog.TagInfo';
+                PSTypeName = 'Klassy.PoShLog.TagInfo';
                 Label      = $_[0];
                 Date       = $_[1];
                 Version    = [system.version]::new($_[0]);
@@ -301,7 +301,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 3.0.2..HEAD (unreleased)
             #
             '3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a'  = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
               CommitId   = '9cadab32fd3feb3996ca933ddd2a751ae28e641a';
               Author     = 'plastikfan';
@@ -311,7 +311,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 3.0.1..3.0.2
             #
             '3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-19 18:17:15 +0100');
               CommitId   = '7bd92c2e3476687311e9cb0e75218ace1a7ef5ce';
               Author     = 'plastikfan';
@@ -319,7 +319,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-19 17:10:14 +0100');
               CommitId   = '23e25cbff58be51c173bb807f49fed78ad289cdf';
               Author     = 'plastikfan';
@@ -329,7 +329,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 3.0.0..3.0.1
             #
             '3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-19 16:23:44 +0100');
               CommitId   = 'b2eef128d0ebc3b9775675a3b6481f0eb41a79e6';
               Author     = 'plastikfan';
@@ -337,7 +337,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-19 16:17:04 +0100');
               CommitId   = 'dc800c68e4aaa6be692c8254490945ad73f69e6d';
               Author     = 'plastikfan';
@@ -345,7 +345,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-19 13:25:29 +0100');
               CommitId   = '283093511fb2f67b4026e6b319b87acf5b2eac49';
               Author     = 'plastikfan';
@@ -355,7 +355,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 2.0.0..3.0.0
             #
             '2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-15 16:57:41 +0100');
               CommitId   = 'b0c917486bc71056622d22bc763abcf7687db4d5';
               Author     = 'plastikfan';
@@ -363,7 +363,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-15 13:24:57');
               CommitId   = 'd227403012774896857387d9f11e7d35d36b703b';
               Author     = 'plastikfan';
@@ -371,7 +371,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-15 12:09:19 +0100');
               CommitId   = 'b055f0b43d1c0518b36b9fa48d23baeac03e55e2';
               Author     = 'plastikfan';
@@ -379,7 +379,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-15 09:53:47 +0100');
               CommitId   = 'b4bdc4b507f50e3a0a953ce2f167415f4fff78a0';
               Author     = 'plastikfan';
@@ -387,7 +387,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-04-15 09:21:51 +0100');
               CommitId   = '31277e6725a753a20d80d3504615fbdb16344a22';
               Author     = 'plastikfan';
@@ -397,7 +397,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 1.2.0..2.0.0
             #
             '1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-01-15 08:59:36');
               CommitId   = '8e04f6c75325ddd7cb66303f71501ec26aac07ae';
               Author     = 'plastikfan';
@@ -405,7 +405,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-01-15 08:57:53');
               CommitId   = 'fe2db959f9b1e8fd902b080b44a5508adeebaeb9';
               Author     = 'plastikfan';
@@ -413,7 +413,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-01-14 20:20:02');
               CommitId   = '54db603182807ef213b111519fd05b547cc5ea1e';
               Author     = 'plastikfan';
@@ -421,7 +421,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2021-01-14 19:52:13');
               CommitId   = '193df3a22c60fe1d6a06b2cf9771968bbf0b0490';
               Author     = 'plastikfan';
@@ -431,7 +431,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 1.1.1..1.2.0
             #
             '1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-09-17 11:29:13');
               CommitId   = '7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c';
               Author     = 'plastikfan';
@@ -439,7 +439,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-09-16 22:49:55');
               CommitId   = 'ab3a9579019b7800c06e95f5af7e3683b321de9c';
               Author     = 'plastikfan';
@@ -447,7 +447,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-09-16 15:11:29 +0100');
               CommitId   = '5130be22558649f5a7ba69689d7416a29b288d40';
               Author     = 'plastikfan';
@@ -455,7 +455,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-09-03 13:45:41 +0100');
               CommitId   = 'e280dea7daea7ae99f7517c876f05ef138538e02';
               Author     = 'plastikfan';
@@ -463,7 +463,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-09-03 12:50:33 +0100');
               CommitId   = '22287029a3a86f1f2c9cd73433075ec8a1d543f3';
               Author     = 'plastikfan';
@@ -473,7 +473,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 1.1.0..1.1.1
             #
             '1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-09-02 16:37:01 +0100');
               CommitId   = '124ae0e81d4e8af762a986c24d0f8c2609f3b694';
               Author     = 'plastikfan';
@@ -481,7 +481,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-31 11:50:59 +0100');
               CommitId   = 'fac0998be058cc00398066b333516c9aea4c61c4';
               Author     = 'plastikfan';
@@ -489,7 +489,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-29 16:36:27 +0100');
               CommitId   = '06d055c6a79062439596c42ecf63a0f5ee42ee8d';
               Author     = 'plastikfan';
@@ -497,7 +497,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-29 16:35:01 +0100');
               CommitId   = '379aefde5a2cd10dcc6d19e2e07691e9d8c74c80';
               Author     = 'plastikfan';
@@ -505,7 +505,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-29 10:01:25 +0100');
               CommitId   = '15eeb4c2098060afb68e28bf04dd88c5dbc19366';
               Author     = 'plastikfan';
@@ -515,7 +515,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 1.0.1..1.1.0
             #
             '1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-21 19:13:17 +0100');
               CommitId   = '5e2b4279b0775cfa1fbf9032691ca910ed4c7979';
               Author     = 'plastikfan';
@@ -523,7 +523,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-21 16:30:25 +0100');
               CommitId   = 'abc321c70f16627d1f657cbdee99de89f21c27c8';
               Author     = 'plastikfan';
@@ -531,7 +531,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-21 14:19:37 +0100');
               CommitId   = 'fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f';
               Author     = 'plastikfan';
@@ -539,7 +539,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             };
 
             '1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-21 14:08:07 +0100');
               CommitId   = 'a055776bebc1c1fa7a329f7df6c6d946c17431f4';
               Author     = 'plastikfan';
@@ -549,7 +549,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 1.0.0..1.0.1
             #
             '1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-18 15:14:21 +0100');
               CommitId   = '11120d3c4ec110123417fcb36423403486d02275';
               Author     = 'plastikfan';
@@ -559,7 +559,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             # 1.0.0 
             #
             '1.0.0/3884bbec11f622f0c5ea8474049a891c02e0eb09'        = [PSCustomObject]@{
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Date       = [DateTime]::Parse('2020-08-17 13:59:08 +0100');
               CommitId   = '3884bbec11f622f0c5ea8474049a891c02e0eb09';
               Author     = 'plastikfan';
@@ -652,13 +652,13 @@ Describe 'ChangeLog' -Tag 'chog' {
 
         [SourceControl]$fakeGit = [FakeGit]::new($Options, $_head);
         [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
-        [MarkdownChangeLogGenerator]$generator = [MarkdownChangeLogGenerator]::new(
+        [MarkdownPoShLogGenerator]$generator = [MarkdownPoShLogGenerator]::new(
           $Options, $fakeGit, $grouper
         );
-        [ChangeLog]$changeLog = [ChangeLog]::new($Options, $fakeGit, $grouper, $generator);
+        [PoShLog]$changeLog = [PoShLog]::new($Options, $fakeGit, $grouper, $generator);
 
         [PSCustomObject]$dependencies = [PSCustomObject]@{
-          PSTypeName    = 'Klassy.ChangeLog.Test.Dependencies'
+          PSTypeName    = 'Klassy.PoShLog.Test.Dependencies'
           #
           SourceControl = $fakeGit;
           Grouper       = $grouper;
@@ -668,13 +668,13 @@ Describe 'ChangeLog' -Tag 'chog' {
         return $changeLog, $dependencies;
       }
 
-      [ChangeLog]$script:_changeLog, $null = Get-TestChangeLog -Options $_options;
+      [PoShLog]$script:_changeLog, $null = Get-TestChangeLog -Options $_options;
 
       function script:Show-Releases {
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
         param(
           [hashtable]$Releases,
-          [ChangeLog]$changer
+          [PoShLog]$changer
         )
 
         [int]$squashedCount = 0;
@@ -864,7 +864,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           #
           [OutputType([hashtable])]
           param(
-            [ChangeLog]$changeLog
+            [PoShLog]$changeLog
           )
           $changeLog.Init();
 
@@ -1188,7 +1188,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           It 'should: return commits for all tags' {
             InModuleScope Elizium.Klassy {
               $_options.Selection.SquashBy = [string]::Empty;
-              [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+              [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
               $changeLog.Init();
 
               [hashtable]$releases = $changeLog.processCommits();
@@ -1216,7 +1216,7 @@ Describe 'ChangeLog' -Tag 'chog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'scope/type';
-            [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1278,7 +1278,7 @@ Describe 'ChangeLog' -Tag 'chog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'type/scope';
-            [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1340,7 +1340,7 @@ Describe 'ChangeLog' -Tag 'chog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'type';
-            [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1372,7 +1372,7 @@ Describe 'ChangeLog' -Tag 'chog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'scope';
-            [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1402,7 +1402,7 @@ Describe 'ChangeLog' -Tag 'chog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = [string]::Empty;
-            [ChangeLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1427,9 +1427,9 @@ Describe 'ChangeLog' -Tag 'chog' {
           [scriptblock]$script:_OnCommit = {
             [OutputType([string])]
             param(
-              [PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
-              [PSTypeName('Klassy.ChangeLog.CommitInfo')]$commit,
-              [PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
+              [PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+              [PSTypeName('Klassy.PoShLog.CommitInfo')]$commit,
+              [PSTypeName('Klassy.PoShLog.TagInfo')]$tagInfo,
               [PSCustomObject]$custom
             )
 
@@ -1442,10 +1442,10 @@ Describe 'ChangeLog' -Tag 'chog' {
           [scriptblock]$script:_OnEndBucket = {
             [OutputType([string])]
             param(
-              [PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
-              [PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
+              [PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+              [PSTypeName('Klassy.PoShLog.TagInfo')]$tagInfo,
               [GeneratorUtils]$utils,
-              [PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
+              [PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
             )
             Write-Debug $("OnEndBucket: decorated path: '$($segmentInfo.DecoratedPath)'");
           }
@@ -1455,16 +1455,16 @@ Describe 'ChangeLog' -Tag 'chog' {
             param(
               [string]$headingType,
               [string]$headingFormat,
-              [PSTypeName('Klassy.ChangeLog.SegmentInfo')]$segmentInfo,
-              [PSTypeName('Klassy.ChangeLog.TagInfo')]$tagInfo,
+              [PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+              [PSTypeName('Klassy.PoShLog.TagInfo')]$tagInfo,
               [GeneratorUtils]$utils,
-              [PSTypeName('Klassy.ChangeLog.WalkInfo')]$custom
+              [PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
             )
             Write-Debug $("OnHeading('$($headingType)'): decorated path: '$($segmentInfo.DecoratedPath)'");
           }
 
           [PSCustomObject]$script:_handlers = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.Handlers';
+            PSTypeName = 'Klassy.PoShLog.Handlers';
           }
 
           $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnHeading' -Value $(
@@ -1488,12 +1488,12 @@ Describe 'ChangeLog' -Tag 'chog' {
               InModuleScope Elizium.Klassy {
                 $_options.Output.GroupBy = 'scope/type';
 
-                [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+                [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
                 $changeLog.Init();
 
                 [array]$releases = $changeLog.composePartitions();
                 [PSCustomObject]$customWalkInfo = [PSCustomObject]@{
-                  PSTypeName = 'Klassy.ChangeLog.WalkInfo';
+                  PSTypeName = 'Klassy.PoShLog.WalkInfo';
                   #
                   Appender   = [LineAppender]::new()
                   Options    = $_options;
@@ -1508,11 +1508,11 @@ Describe 'ChangeLog' -Tag 'chog' {
         }
       } # GroupBy.Walk
 
-      Context 'MarkdownChangeLogGenerator.Generate' {
+      Context 'MarkdownPoShLogGenerator.Generate' {
         Context 'given: full history (no tags defined)' {
           It 'should: generate content' -Tag 'Current' {
             InModuleScope Elizium.Klassy {
-              [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
               $changeLog.Init();
 
               [array]$releases = $changeLog.composePartitions();
@@ -1529,13 +1529,13 @@ Describe 'ChangeLog' -Tag 'chog' {
             It 'should: generate content' {
               InModuleScope Elizium.Klassy {
                 $_options.Selection.Tags = @{
-                  PSTypeName = 'Klassy.ChangeLog.Options.Selection.Tags';
+                  PSTypeName = 'Klassy.PoShLog.Options.Selection.Tags';
                   Until      = '1.0.1';
                 }
                 $_options.Output.GroupBy = [string]::Empty;
                 $_options.Output.Headings.H3 = '*{ungroupedStmt}';
 
-                [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+                [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
                 $changeLog.Init();
 
                 [array]$releases = $changeLog.composePartitions();
@@ -1548,12 +1548,12 @@ Describe 'ChangeLog' -Tag 'chog' {
             }
           } # and: no GroupBy
         } # given: full history (no tags defined)
-      } # MarkdownChangeLogGenerator.Generate
+      } # MarkdownPoShLogGenerator.Generate
 
-      Context 'given: MarkdownChangeLogGenerator.CreateComparisonLinks' {
+      Context 'given: MarkdownPoShLogGenerator.CreateComparisonLinks' {
         It 'should: generate content' {
           InModuleScope Elizium.Klassy {
-            [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [string]$content = $dependencies.Generator.CreateComparisonLinks(
@@ -1564,10 +1564,10 @@ Describe 'ChangeLog' -Tag 'chog' {
         }
       }
 
-      Context 'given: MarkdownChangeLogGenerator.CreateDisabledWarnings' {
+      Context 'given: MarkdownPoShLogGenerator.CreateDisabledWarnings' {
         It 'should: generate content' {
           InModuleScope Elizium.Klassy {
-            [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
             $changeLog.Init();
 
             [string]$content = $dependencies.Generator.CreateDisabledWarnings();
@@ -1578,11 +1578,11 @@ Describe 'ChangeLog' -Tag 'chog' {
     }
   } # composePartitions
 
-  Describe 'given: ChangeLog with Git' {
+  Describe 'given: PoShLog with Git' {
     Context 'and: klassy' {
       It 'should: Build real change log' {
         InModuleScope Elizium.Klassy {
-          [ChangeLog]$changeLog = New-ChangeLog -Options $_options;
+          [PoShLog]$changeLog = New-PoShLog -Options $_options;
           $_changeLog.Init();
 
           [string]$content = $changeLog.Build();
@@ -1596,7 +1596,7 @@ Describe 'ChangeLog' -Tag 'chog' {
         }
       }
     }
-  } # given: ChangeLog with Git
+  } # given: PoShLog with Git
 
   Describe 'GeneratorUtils' {
     Context 'Evaluate' {
@@ -1614,7 +1614,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             $includeRegex.Matches($_subject)[0].Groups;
 
           [PSCustomObject]$script:_commit = [PSCustomObject]@{
-            PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+            PSTypeName = 'Klassy.PoShLog.CommitInfo';
             #
             Date       = [DateTime]::Parse('2021-04-19 16:17:04 +0100');
             CommitId   = 'dc800c6';
@@ -1622,7 +1622,7 @@ Describe 'ChangeLog' -Tag 'chog' {
             Author     = 'plastikfan';
             Subject    = $_subject;
             Info       = [PSCustomObject]@{ # => this replicates 'GroupByImpl.Partition'
-              PSTypeName = 'Klassy.ChangeLog.CommitInfo';
+              PSTypeName = 'Klassy.PoShLog.CommitInfo';
               Selectors  = $selectors;
               IsBreaking = $groups.ContainsKey('break') -and $groups['break'].Success;
               Groups     = $groups;
@@ -1773,7 +1773,7 @@ Describe 'ChangeLog' -Tag 'chog' {
                 [string]$statement,
                 [string]$expected
               )
-              [ChangeLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
               $changeLog.Init();
 
               $_variables['avatar-img'] = $dependencies.Generator._utils.AvatarImg($_commit.Author);
@@ -1846,7 +1846,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           It 'should: throw' {
             InModuleScope Elizium.Klassy {
               $_options.Output.Statements = [PSCustomObject]@{
-                PSTypeName = 'Klassy.ChangeLog.Options.Output.Statements';
+                PSTypeName = 'Klassy.PoShLog.Options.Output.Statements';
                 #
                 Break      = '*{breakStmt} *BREAKING CHANGE* ';
               }
@@ -1867,7 +1867,7 @@ Describe 'ChangeLog' -Tag 'chog' {
           It 'should: throw' {
             InModuleScope Elizium.Klassy {
               $_options.Output.Statements = [PSCustomObject]@{
-                PSTypeName = 'Klassy.ChangeLog.Options.Output.Statements';
+                PSTypeName = 'Klassy.PoShLog.Options.Output.Statements';
                 #
                 Break      = '?{is-breaking;breakStmt} *BREAKING CHANGE* ';
               }
@@ -1887,7 +1887,7 @@ Describe 'ChangeLog' -Tag 'chog' {
     } # Evaluate
   } # GeneratorUtils
 
-  Describe 'ChangeLogOptionsManager' {
+  Describe 'PoShLogOptionsManager' {
     Context 'given: requested <name> options does exist' {
       It 'should: create new options' -TestCases @(
         @{ Name = 'Alpha' },
@@ -1903,19 +1903,19 @@ Describe 'ChangeLog' -Tag 'chog' {
           [string]$rootPath = Join-Path -Path $TestDrive -ChildPath $root;
           [PSCustomObject]$optionsInfo = [PSCustomObject]@{
             Base          = '-changelog.options';
-            DirectoryName = [ChangeLogSchema]::DIRECTORY;
+            DirectoryName = [PoShLogProfile]::DIRECTORY;
             GroupBy       = 'scope/type/change/break';
             Root          = $rootPath;
           }
 
-          [ChangeLogOptionsManager]$manager = New-ChangeLogOptionsManager -OptionsInfo $optionsInfo;
+          [PoShLogOptionsManager]$manager = New-PoShLogOptionsManager -OptionsInfo $optionsInfo;
           [boolean]$withEmoji = $true;
 
           [PSCustomObject]$options = $manager.FindOptions($Name, $withEmoji);
           $manager.Found | Should -BeFalse;
           $options | Should -Not -BeNullOrEmpty;
 
-          [ChangeLog]$changeLog = New-ChangeLog -Options $options;
+          [PoShLog]$changeLog = New-PoShLog -Options $options;
           $changeLog.Build() | Should -Not -BeNullOrEmpty;
         }
       }
@@ -1924,7 +1924,7 @@ Describe 'ChangeLog' -Tag 'chog' {
     Context 'given: requested options exist' {
       It 'should: load existing options and build' {
         InModuleScope Elizium.Klassy {
-          [string]$directoryName = [ChangeLogSchema]::DIRECTORY;
+          [string]$directoryName = [PoShLogProfile]::DIRECTORY;
           [string]$root = 'root';
           [string]$rootPath = Join-Path -Path $TestDrive -ChildPath $root;
           [PSCustomObject]$optionsInfo = [PSCustomObject]@{
@@ -1941,14 +1941,14 @@ Describe 'ChangeLog' -Tag 'chog' {
           [string]$destinationPath = Join-Path -Path $directoryPath -ChildPath $optionsFileName;
           Copy-Item -LiteralPath $testPath -Destination $destinationPath;
 
-          [ChangeLogOptionsManager]$manager = New-ChangeLogOptionsManager -OptionsInfo $optionsInfo;
+          [PoShLogOptionsManager]$manager = New-PoShLogOptionsManager -OptionsInfo $optionsInfo;
           [boolean]$withEmoji = $true;
 
           [PSCustomObject]$options = $manager.FindOptions('Test', $withEmoji);
           $manager.Found | Should -BeTrue;
           $options | Should -Not -BeNullOrEmpty;
 
-          [ChangeLog]$changeLog = New-ChangeLog -Options $options;
+          [PoShLog]$changeLog = New-PoShLog -Options $options;
           $changeLog.Build() | Should -Not -BeNullOrEmpty; ;
         }
       }
@@ -1959,12 +1959,12 @@ Describe 'ChangeLog' -Tag 'chog' {
         InModuleScope Elizium.Klassy {
           [string]$optionsFileName = 'Test-emoji-changelog.options.json';
           [string]$testPath = "./Tests/Data/changelog/$($optionsFileName)";
-          [string]$schemaFileName = [ChangeLogSchema]::OPTIONS_SCHEMA_FILENAME;
+          [string]$schemaFileName = [PoShLogProfile]::OPTIONS_SCHEMA_FILENAME;
           [string]$schemaPath = "./FileList/$($schemaFileName)";
           [string]$json = Get-Content -LiteralPath $testPath;
           $null = Test-Json -Json $json -SchemaFile $schemaPath;
         }
       }
     }
-  } # ChangeLogOptionsManager
-} # ChangeLog
+  } # PoShLogOptionsManager
+} # PoShLog

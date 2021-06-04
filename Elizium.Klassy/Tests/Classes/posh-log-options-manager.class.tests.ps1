@@ -2,7 +2,7 @@ using module "..\..\Output\Elizium.Klassy\Elizium.Klassy.psm1"
 
 Set-StrictMode -Version 1.0
 
-Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
+Describe 'PoShLogOptionsManager' -Tag 'ch-log' {
   BeforeAll {
     Get-Module Elizium.Klassy | Remove-Module
     Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1 `
@@ -10,7 +10,7 @@ Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
 
     InModuleScope -ModuleName Elizium.Klassy {
       [string] $script:ROOT = 'root';
-      [string] $script:DIRECTORY = [ChangeLogSchema]::DIRECTORY;
+      [string] $script:DIRECTORY = [PoShLogProfile]::DIRECTORY;
     }
   }
 
@@ -33,7 +33,7 @@ Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
         Root          = $ReadRootPath.InvokeReturnAsIs();
       }
 
-      [ChangeLogOptionsManager]$script:_manager = [ChangeLogOptionsManager]::New(
+      [PoShLogOptionsManager]$script:_manager = [PoShLogOptionsManager]::New(
         $proxyGit, $optionsInfo
       );
     }
@@ -135,7 +135,7 @@ Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
         It 'should: set default headings correctly' {
           InModuleScope Elizium.Klassy {
             [boolean]$withEmoji = $true;
-            [string]$placeholder = [ChangeLogSchema]::StatementPlaceholder();
+            [string]$placeholder = [PoShLogProfile]::StatementPlaceholder();
             [PSCustomObject]$options = $_manager.Eject('Elizium', $withEmoji);
 
             3..6 | ForEach-Object {
@@ -171,16 +171,16 @@ Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
             # Now re-load to check internal representation of options is not persisted
             #
             [PSCustomObject]$options = Get-Content -Path $destinationPath -Raw | ConvertFrom-Json -Depth 20;
-            $options.Output.Headings.H3 | Should -Be $([ChangeLogSchema]::StatementPlaceholder());
+            $options.Output.Headings.H3 | Should -Be $([PoShLogProfile]::StatementPlaceholder());
           }
         }
       }
     }
   } # Eject
 
-  Describe 'New-ChangeLogOptionsManager' {
+  Describe 'New-PoShLogOptionsManager' {
     Context 'given: <name> options config' {
-      It 'should: create a new ChangeLogOptionsManager' -TestCases @(
+      It 'should: create a new PoShLogOptionsManager' -TestCases @(
         @{ Name = 'Test' },
         @{ Name = 'foo' }
       ) {
@@ -194,7 +194,7 @@ Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
             GroupBy       = 'scope/type/change/break';
             Root          = $ReadRootPath.InvokeReturnAsIs();
           }
-          [ChangeLogOptionsManager]$manager = New-ChangeLogOptionsManager -OptionsInfo $optionsInfo;
+          [PoShLogOptionsManager]$manager = New-PoShLogOptionsManager -OptionsInfo $optionsInfo;
           $manager | Should -Not -BeNullOrEmpty;
 
           [PSCustomObject]$options = $manager.FindOptions($name, $true);
@@ -203,4 +203,4 @@ Describe 'ChangeLogOptionsManager' -Tag 'ch-log' {
       }
     }
   }
-} # ChangeLogOptionsManager
+} # PoShLogOptionsManager
