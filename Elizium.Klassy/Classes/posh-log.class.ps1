@@ -903,52 +903,6 @@ class GroupByImpl : GroupBy {
     }
   } # Walk
 
-  [PSCustomObject] composeIsaLookup([string]$name, [hashtable]$lookup) {
-    [regex]$isaRegex = [regex]::new('^isa\:(?<parent>[\w\-]+)$');
-
-    [string[]]$keys = $lookup.Keys;
-    [string[]]$values = $(
-      $keys | Where-Object {
-        ($_ -ne '?') -and -not($isaRegex.IsMatch($lookup[$_])) } | ForEach-Object {
-        $_.ToLower();
-      }
-    );
-
-    [hashtable]$overrides = @{};
-    $keys | Where-Object { $isaRegex.IsMatch($lookup[$_]) } | ForEach-Object {
-      [string]$isa = $lookup[$_];
-      [System.Text.RegularExpressions.Match]$m = $isaRegex.Matches($isa)[0];
-      [string]$parent = $m.Groups['parent'].Success ? $m.Groups['parent'].Value.Trim() : '';
-
-      if (-not($values -contains $parent)) {
-        throw [System.Management.Automation.MethodInvocationException]::new(
-          $(
-            "GroupByImpl.composeIsaLookup: found invalid isa entry: '$_'" +
-            ", '$parent' does not exist in '$name'."
-          )
-        );
-      }
-
-      if ($_ -eq 'isa') {
-        throw [System.Management.Automation.MethodInvocationException]::new(
-          $(
-            "GroupByImpl.composeIsaLookup: found invalid isa entry: '$_'" +
-            ", refers to itself in '$name'."
-          )
-        );
-      }
-      $overrides[$_] = $parent;
-    }
-
-    [PSCustomObject]$result = [PSCustomObject]@{
-      PSTypeName = 'Klassy.PoShLog.IsaLookup';
-      #
-      Values     = $values;
-      Overrides  = $overrides;
-    }
-
-    return $result;
-  } 
   # To generate the output, we need the releases to be in descending order of
   # the date, but of course, we need to be able to identify each release. Building
   # a hash of release tag to the release collection will not guarantee the order
@@ -973,13 +927,13 @@ class GroupByImpl : GroupBy {
       $null;
     }
 
-    [PSCustomObject]$changeTypes = $this.composeIsaLookup(
+    [PSCustomObject]$changeTypes = [GeneratorUtils]::CreateIsaLookup(
       'ChangeTypes', $this.Options.Output.Lookup.ChangeTypes
     );
-    [PSCustomObject]$scopes = $this.composeIsaLookup(
+    [PSCustomObject]$scopes = [GeneratorUtils]::CreateIsaLookup(
       'Scopes', $this.Options.Output.Lookup.Scopes
     );
-    [PSCustomObject]$types = $this.composeIsaLookup(
+    [PSCustomObject]$types = [GeneratorUtils]::CreateIsaLookup(
       'Types', $this.Options.Output.Lookup.Types
     );
 
@@ -1015,27 +969,28 @@ class GroupByImpl : GroupBy {
 
             [PoShLogProfile]::GetSegments($this._segments) | ForEach-Object {
               if ($groups.ContainsKey($_) ) {
-                # Exception override for break, the '!' is not a very useful
-                # value, so translate to something more explicit.
+                # IMPORTANT: a value must be allowed to be left to be the empty string. Do
+                # NOT attempt to assign to some default like 'uncategorised' otherwise
+                # this will break condition statements.
                 #
+                [string]$capture = $groups[$_].Success ? $groups[$_].Value : [string]::Empty;
                 $selectors[$_] = if ($_ -eq 'break') {
-                  ([string]::IsNullOrEmpty($groups[$_]) -and -not($groups[$_].Success)) ? `
-                    [PoShLogProfile]::NON_BREAKING : [PoShLogProfile]::BREAKING;
+                  # Exception override for break, the '!' is not a very useful
+                  # value, so translate to something more explicit.
+                  #
+                  [PoShLogProfile]::BreakingValue($capture)
                 }
                 elseif ($_ -eq 'scope') {
-                  [string]$scope = $groups[$_].Value;
-                  $scopes.Overrides.ContainsKey($scope) ? $scopes.Overrides[$scope] : $scope;
-
-                  if ([string]::IsNullOrEmpty($scope)) {
-                    $scope = $this._uncategorised;
-                  }
+                  $scopes.Isa.ContainsKey($capture) ? $scopes.Isa[$capture] : $capture;
                 }
                 elseif ($_ -eq 'type') {
-                  [string]$type = $groups[$_].Value;
-                  $types.Overrides.ContainsKey($type) ? $types.Overrides[$type] : $type;
+                  $types.Isa.ContainsKey($capture) ? $types.Isa[$capture] : $capture;
+                }
+                elseif ($_ -eq 'change') {
+                  $changeTypes.Isa.ContainsKey($capture) ? $changeTypes.Isa[$capture] : $capture;
                 }
                 else {
-                  $groups[$_].Value;
+                  $capture;
                 }
               }
             }
@@ -1046,11 +1001,8 @@ class GroupByImpl : GroupBy {
 
                 if ($changeRegex.IsMatch($body)) {
                   [string]$change = $changeRegex.Matches($body)[0].Value.Trim().ToLower();
-
-                  if ($changeTypes.Values -contains $change) {
-                    $selectors['change'] = $changeTypes.Overrides.ContainsKey($change) ? `
-                      $changeTypes.Overrides[$change] : $change;
-                  }
+                  $selectors['change'] = $changeTypes.Isa.ContainsKey($change) ? `
+                    $changeTypes.Isa[$change] : [string]::Empty
                 }
               }
             }
@@ -1459,8 +1411,9 @@ class PoShLogProfile {
 
     return $result;
   }
-  static [string]$BREAKING = 'breaking';
-  static [string]$NON_BREAKING = 'non-breaking';
+  static [string] BreakingValue ([string]$value) {
+    return [string]::IsNullOrEmpty($value) ? 'non-breaking' : 'breaking';
+  }
   static [string]$LOOKUP_UNKNOWN = '?';
 
   static [string] StatementPlaceholder() {
@@ -1574,6 +1527,51 @@ class GeneratorUtils {
     return $($label -eq 'HEAD') ? 'Unreleased' : $label;
   }
 
+  static [PSCustomObject] CreateIsaLookup([string]$name, [hashtable]$lookup) {
+    [PSCustomObject]$result = @{
+      Isa   = @{};
+      Value = @{};
+    }
+    [regex]$isaRegex = [regex]::new('^isa\:(?<parent>[^:]+)$');
+
+    $lookup.Keys | ForEach-Object {
+      if ($isaRegex.IsMatch($lookup[$_])) {
+        [System.Text.RegularExpressions.Match]$m = $isaRegex.Matches($lookup[$_])?[0];
+        [string]$parent = ${m}?.Groups['parent'].Success ? `
+          $m.Groups['parent'].Value.Trim() : [string]::Empty;
+
+        if ($_ -eq $parent) {
+          throw [System.Management.Automation.MethodInvocationException]::new(
+            $(
+              "GeneratorUtils.CreateIsaLookup: found invalid isa entry: '$_'" +
+              ", refers to itself in '$name'."
+            )
+          );
+        }
+
+        if (-not($lookup.ContainsKey($parent))) {
+          throw [System.Management.Automation.MethodInvocationException]::new(
+            $(
+              "GeneratorUtils.CreateIsaLookup: found invalid isa entry: '$_'" +
+              ", '$parent' does not exist in '$name'."
+            )
+          );
+        }
+
+        if (-not([string]::IsNullOrEmpty($parent))) {
+          $result.Isa[$_] = $parent;
+          $result.Value[$_] = $lookup[$parent];
+        }
+      }
+      else {
+        $result.Isa[$_] = $_;
+        $result.Value[$_] = $lookup[$_];
+      }
+    }
+
+    return $result;
+  }
+
   [string] AvatarImg([string]$username) {
     [string]$hostUrl = ($this.Options)?.SourceControl.HostUrl;
     [string]$size = ($this.Options)?.SourceControl.AvatarSize;
@@ -1605,7 +1603,7 @@ class GeneratorUtils {
     return $link;
   }
 
-  [string] getVariable([string]$name, [PSCustomObject]$commit, [hashtable]$variables) {
+  [string] GetVariable([string]$name, [PSCustomObject]$commit, [hashtable]$variables) {
     [string]$result = if ($variables.ContainsKey($name)) {
       $variables[$name];
     }
@@ -1619,7 +1617,7 @@ class GeneratorUtils {
     return $result;
   }
 
-  [string] getStatement([string]$name, [PSCustomObject]$options, [hashtable]$variables) {
+  [string] GetStatement([string]$name, [PSCustomObject]$options, [hashtable]$variables) {
 
     [string]$result = if ($name.EndsWith('Stmt')) {
       $name = $name -replace 'Stmt';
@@ -1657,16 +1655,16 @@ class GeneratorUtils {
     [string]$variable, [string]$stmt, [PSCustomObject]$commit,
     [hashtable]$variables, [string]$else, [string[]]$trail) {
 
-    [string]$variableValue = $this.getVariable($variable, $commit, $variables);
+    [string]$variableValue = $this.GetVariable($variable, $commit, $variables);
     [boolean]$affirmative = (-not([string]::IsNullOrEmpty($variableValue))) -and ($variableValue -ne 'false');
 
     [string]$result = if ($affirmative) {
-      [string]$stmtValue = $this.getStatement($stmt, $this.Options, $variables);
+      [string]$stmtValue = $this.GetStatement($stmt, $this.Options, $variables);
       $this.evaluateStmt($stmtValue, $commit, $variables, $trail);
     }
     else {
       if (-not([string]::IsNullOrEmpty($else))) {
-        [string]$elseValue = $this.getStatement($else, $this.Options, $variables);
+        [string]$elseValue = $this.GetStatement($else, $this.Options, $variables);
         $this.Evaluate($elseValue, $commit, $variables);
       }
       else {
@@ -2226,7 +2224,6 @@ class PoShLogOptionsManager {
             )
           );
           Exclude    = @();
-          Change     = '^[\w]+';
         }
 
         Tags                = [PSCustomObject]@{
@@ -2402,8 +2399,10 @@ class PoShLogOptionsManager {
       'Elizium' {
         $skeleton.Output.Statements.Commit = $(
           "+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}" +
-          "?{change;changeCommitStmt}*{subjectStmt}*{authorStmt}*{metaStmt}"
+          "?{change;changeCommitStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}"
         );
+        $skeleton.Selection | Add-Member `
+          -NotePropertyName 'Change' -NotePropertyValue '^[\w]+'
         $skeleton;
 
         break;

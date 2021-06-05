@@ -2,7 +2,7 @@
 
 Set-StrictMode -Version 1.0
 
-Describe 'PoShLog' -Tag 'chog' {
+Describe 'PoShLog' -Tag 'plog' {
   BeforeAll {
     Get-Module Elizium.Klassy | Remove-Module
     Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1 `
@@ -1510,7 +1510,7 @@ Describe 'PoShLog' -Tag 'chog' {
 
       Context 'MarkdownPoShLogGenerator.Generate' {
         Context 'given: full history (no tags defined)' {
-          It 'should: generate content' -Tag 'Current' {
+          It 'should: generate content' {
             InModuleScope Elizium.Klassy {
               [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
               $changeLog.Init();
@@ -1885,6 +1885,62 @@ Describe 'PoShLog' -Tag 'chog' {
         }
       } # given: config error
     } # Evaluate
+
+    Context 'CreateIsaLookup' -Tag 'Current' {
+      Context 'given: simple parent' {
+        It 'should: return remapped value' {
+          [hashtable]$optionTypes = @{
+            "Performance" = ":hammer:";
+            "perf"        = "isa:Performance";
+          }
+          [PSCustomObject]$types = [GeneratorUtils]::CreateIsaLookup(
+            'Types', $optionTypes
+          );
+          [string]$type = 'perf';
+
+          $types.Isa[$type] | Should -BeExactly 'Performance';
+          $types.Value[$type] | Should -BeExactly ':hammer:'; 
+        }
+      }
+
+      Context 'given: parent with spaces' {
+        It 'should: return remapped value' {
+          [hashtable]$optionScopes = @{
+            "Parameter Set Tools" = ":postbox:";
+            "pstools"             = "isa:Parameter Set Tools";
+          }
+          [PSCustomObject]$scopes = [GeneratorUtils]::CreateIsaLookup(
+            'Scopes', $optionScopes
+          );
+          [string]$scope = 'pstools';
+
+          $scopes.Isa[$scope] | Should -BeExactly 'Parameter Set Tools';
+          $scopes.Value[$scope] | Should -BeExactly ':postbox:';
+        }
+      }
+
+      Context 'given: entry refers to itself' {
+        It 'should: throw' {
+          {
+            [GeneratorUtils]::CreateIsaLookup('Scopes', @{
+                "Parameter Set Tools" = ":postbox:";
+                "pstools"             = "isa:pstools";
+              });
+          } | Should -Throw;
+        }
+      }
+
+      Context 'given: entry refers to non existent parent' {
+        It 'should: throw' {
+          {
+            [GeneratorUtils]::CreateIsaLookup('Scopes', @{
+                "Parameter Set Tools" = ":postbox:";
+                "pstools"             = "isa:blooper";
+              });
+          } | Should -Throw;
+        }
+      }
+    }
   } # GeneratorUtils
 
   Describe 'PoShLogOptionsManager' {
