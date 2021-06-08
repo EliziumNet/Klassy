@@ -1265,23 +1265,39 @@ class MarkdownPoShLogGenerator : PoShLogGenerator {
       $custom.Appender.AppendLine([string]::Empty);
     } # OnHeading
 
+    [scriptblock]$OnSection = {
+      param(
+        [string]$sectionName,
+        [string]$titleStmt,
+        [string[]]$content,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$tagInfo,
+        [GeneratorUtils]$utils,
+        [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
+      )
+      [PSCustomObject]$commit = $null;
+      [hashtable]$headingVariables = $utils.GetHeadingVariables($segmentInfo, $tagInfo);
+      [string]$title = $utils.Evaluate($titleStmt, $commit, $headingVariables).Trim();
+      Write-Debug "--> Section('$sectionName'): Title: $title, Scope: '$($headingVariables['scope'])'";
+      $custom.Appender.AppendLine($title);
+
+      foreach ($stmt in $content) {
+        [string]$entry = [string]$title = $utils.Evaluate($stmt, $commit, $headingVariables).Trim();
+        $custom.Appender.AppendLine($entry);
+      }
+      $custom.Appender.AppendLine([string]::Empty);
+    }
+
     [PSCustomObject]$handlers = [PSCustomObject]@{
       PSTypeName = 'Klassy.PoShLog.Handlers';
       #
       Utils      = $this._utils;
     }
 
-    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnHeading' -Value $(
-      $OnHeading
-    );
-
-    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnCommit' -Value $(
-      $OnCommit
-    );
-
-    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnEndBucket' -Value $(
-      $OnEndBucket
-    );
+    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnHeading' -Value $($OnHeading);
+    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnCommit' -Value $($OnCommit);
+    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnEndBucket' -Value $($OnEndBucket);
+    $handlers | Add-Member -MemberType ScriptMethod -Name 'OnSection' -Value $($OnSection);
 
     [string]$releaseStmt = $this.Options.Output.Headings.H2;
 
@@ -1302,6 +1318,16 @@ class MarkdownPoShLogGenerator : PoShLogGenerator {
         'H2', $this.Options.Output.Headings.H2,
         $nullSegmentInfo, $release.Tag, $handlers.Utils, $customWalkInfo
       );
+
+      if (-not([string]::IsNullOrEmpty($this.Options.Output.Sections.Release.Highlights))) {
+        $handlers.OnSection(
+          'Highlights',
+          $this.Options.Output.Sections.Release.Highlights,
+          $this.Options.Output.Sections.Release.HighlightContent,
+          $nullSegmentInfo,
+          $release.Tag,
+          $this._utils, $customWalkInfo);
+      }
 
       $this._grouper.Walk($release, $handlers, $customWalkInfo);
     }
@@ -2269,6 +2295,17 @@ class PoShLogOptionsManager {
           Dirty      = 'DIRTY: *{dirtyStmt}';
         }  # Headings
 
+        Sections   = [PSCustomObject]@{
+          PSTypeName = 'Klassy.PoShLog.Options.Output.Sections';
+          #
+          Release    = [PSCustomObject]@{
+            PSTypeName       = 'Klassy.PoShLog.Options.Output.Sections.Release';
+            #
+            Highlights       = '*{highlightsStmt}';
+            HighlightContent = @('*{highlightDummy}');
+          }
+        }
+
         GroupBy    = 'scope/type/change/break';
 
         LookUp     = [PSCustomObject]@{ # => '&'
@@ -2341,28 +2378,30 @@ class PoShLogOptionsManager {
         } # Literals
 
         Statements = [PSCustomObject]@{ # => '*'
-          PSTypeName   = 'Klassy.PoShLog.Options.Output.Statements';
+          PSTypeName     = 'Klassy.PoShLog.Options.Output.Statements';
           #
           # These are overwritten but specified here as a reference to all
           # valid fields.
           #
-          ActiveScope  = "+{scope}";
-          Author       = ' by `@+{author}` &{_A}';
-          Avatar       = ' by `@+{author}` +{avatar-img}';
-          Break        = '&{_B}';
-          Breaking     = '!{broken} *BREAKING CHANGE* ';
-          Change       = 'Change Type(&{_C}+{change})';
-          ChangeCommit = '&{_C} ';
-          Commit       = '+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}?{change;changeCommitStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
-          Dirty        = '!{dirty}';
-          DirtyCommit  = '+ ?{is-breaking;breakingStmt}+{subject}';
-          IssueLink    = ' \<**+{issue-link}**\>';
-          Meta         = ' (Id: **+{commitid-link}**)?{issue-link;issueLinkStmt}';
-          Scope        = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
-          Squashed     = 'SQUASHED: ';
-          Subject      = '**^{body}**';
-          Type         = 'Commit Type(&{_T}+{type})';
-          Ungrouped    = 'UNGROUPED';
+          ActiveScope    = "+{scope}";
+          Author         = ' by `@+{author}` &{_A}';
+          Avatar         = ' by `@+{author}` +{avatar-img}';
+          Break          = '&{_B}';
+          Breaking       = '!{broken} *BREAKING CHANGE* ';
+          Change         = 'Change Type(&{_C}+{change})';
+          ChangeCommit   = '&{_C} ';
+          Commit         = '+ ?{is-breaking;breakingStmt}?{is-squashed;squashedStmt}?{change;changeCommitStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
+          Dirty          = '!{dirty}';
+          DirtyCommit    = '+ ?{is-breaking;breakingStmt}+{subject}';
+          Highlights     = $this.useEmoji($ifEmoji, ':sparkles: HIGHLIGHTS', 'HIGHLIGHTS');
+          HighlightDummy = '+ Lorem ipsum dolor sit amet';
+          IssueLink      = ' \<**+{issue-link}**\>';
+          Meta           = ' (Id: **+{commitid-link}**)?{issue-link;issueLinkStmt}';
+          Scope          = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
+          Squashed       = 'SQUASHED: ';
+          Subject        = '**^{body}**';
+          Type           = 'Commit Type(&{_T}+{type})';
+          Ungrouped      = 'UNGROUPED';
         } # Statements
 
         Warnings   = [PSCustomObject]@{
@@ -2651,17 +2690,43 @@ class PoShLogOptionsManager {
 
   [void] verify([PSCustomObject]$options) {
     [array]$checklist = @(
+      # Output
+      #
+      @{ Node = $options.Output; Member = 'GroupBy'; Type = [string]; Path = './Output'; },
+
+      # Output.Selection
+      #
       @{ Node = $options.Selection; Member = 'Subject'; Type = [PSCustomObject]; Path = './Selection'; },
       @{ Node = $options.Selection; Member = 'Tags'; Type = [PSCustomObject]; Path = './Tags'; },
+
+      # Output.SourceControl
+      #
       @{ Node = $options.SourceControl; Member = 'AvatarSize'; Type = [string]; Path = './SourceControl'; },
       @{ Node = $options.SourceControl; Member = 'CommitIdSize'; Type = [long]; Path = './SourceControl'; },
+
+      # Output.Headings
+      #
       @{ Node = $options.Output.Headings; Member = 'Dirty'; Type = [string]; Path = './Output/Headings'; }
-      @{ Node = $options.Output; Member = 'GroupBy'; Type = [string]; Path = './Output'; },
+
+      # Output.Sections
+      #
+      @{ Node = $options.Output.Sections; Member = 'Release'; Type = [PSCustomObject]; Path = './Output/Sections'; }
+
+      # Output.Sections.Release
+      #
+      @{ Node = $options.Output.Sections.Release; Member = 'Highlights'; Type = [string]; Path = './Output/Sections/Release'; }
+      @{ Node = $options.Output.Sections.Release; Member = 'HighlightContent'; Type = [array]; Path = './Output/Sections/Release'; }
+
+      # Output.Literals
+      #
       @{ Node = $options.Output.Literals; Member = 'Broken'; Type = [string]; Path = './Output.Literals'; },
       @{ Node = $options.Output.Literals; Member = 'BucketEnd'; Type = [string]; Path = './Output.Literals'; },
       @{ Node = $options.Output.Literals; Member = 'DateFormat'; Type = [string]; Path = './Output.Literals'; },
       @{ Node = $options.Output.Literals; Member = 'Dirty'; Type = [string]; Path = './Output.Literals'; },
       @{ Node = $options.Output.Literals; Member = 'Uncategorised'; Type = [string]; Path = './Output.Literals'; },
+
+      # Output.Statements
+      #
       @{ Node = $options.Output.Statements; Member = 'Break'; Type = [string]; Path = './Output.Statements'; },
       @{ Node = $options.Output.Statements; Member = 'Change'; Type = [string]; Path = './Output.Statements'; },
       @{ Node = $options.Output.Statements; Member = 'Scope'; Type = [string]; Path = './Output.Statements'; },
