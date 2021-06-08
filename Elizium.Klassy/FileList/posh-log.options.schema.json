@@ -131,7 +131,8 @@
       "type": "object",
 
       "required": [
-        "Headings", "GroupBy", "LookUp", "Literals", "Statements", "Warnings", "Base", "Template"
+        "Headings", "GroupBy", "LookUp", "Literals", "Statements",
+        "Warnings", "Base", "Template", "Sections"
       ],
       "properties": {
         "Headings": {
@@ -160,6 +161,30 @@
               "pattern": "\\*\\{\\$\\}"
             },
             "Dirty": { "type": "string" }
+          }
+        },
+        "Sections": {
+          "title": "Pre-defined markdown sections",
+          "type": "object",
+
+          "required": ["Release"],
+          "properties": {
+            "Release": {
+              "title": "Release content",
+              "type": "object",
+
+              "required": ["Highlights", "HighlightContent"],
+              "properties": {
+                "Highlights": {
+                  "title": "The Highlights title line statement",
+                  "type": "string"
+                },
+                "HighlightContent" : {
+                  "title": "Multi-line highlights content",
+                  "type": "array"
+                }
+              }
+            }
           }
         },
         "GroupBy": { "type": "string" },

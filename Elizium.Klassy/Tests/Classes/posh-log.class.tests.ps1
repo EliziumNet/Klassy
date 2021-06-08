@@ -130,6 +130,13 @@ Describe 'PoShLog' -Tag 'plog' {
             Dirty      = 'DIRTY: *{dirtyStmt}';
           }
 
+          Sections   = [PSCustomObject]@{
+            Release = [PSCustomObject]@{
+              Highlights       = "*{highlightsStmt}";
+              HighlightContent = @('*{highlightDummyStmt}');
+            }
+          }
+
           # => /#change-log/##release/###scope/####type
           # /#change-log/##release/ is fixed and can't be customised
           #
@@ -212,24 +219,26 @@ Describe 'PoShLog' -Tag 'plog' {
             Uncategorised = 'uncategorised';
           }
           Statements = [PSCustomObject]@{ # => '*'
-            PSTypeName  = 'Klassy.PoShLog.Options.Output.Statements';
+            PSTypeName       = 'Klassy.PoShLog.Options.Output.Statements';
             #
-            ActiveScope = "+{scope}";
-            Author      = ' by `@+{author}` &{_A}'; # &{_A}: Author, +{avatar}: git-avatar
-            Avatar      = ' by `@+{author}` +{avatar-img}';
-            Break       = '!{broken} *BREAKING CHANGE* ';
-            Breaking    = '&{_B}';
-            Change      = '[Change Type: &{_C}+{change}] => ';
-            IssueLink   = ' \<+{issue-link}\>';
-            Meta        = ' (Id: +{commitid-link})?{issue-link;issueLinkStmt}'; # issue-link must be conditional
-            Commit      = '+ ?{is-breaking;breakStmt}?{is-squashed;squashedStmt}*{changeStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
-            DirtyCommit = "+ ?{is-breaking;breakingStmt}+{subject}";
-            Dirty       = '!{dirty}';
-            Scope       = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
-            Squashed    = 'SQUASHED: ';
-            Subject     = 'Subject: **+{subject}**';
-            Type        = 'Commit-Type(&{_T} +{type})';
-            Ungrouped   = "UNGROUPED!";
+            ActiveScope      = "+{scope}";
+            Author           = ' by `@+{author}` &{_A}'; # &{_A}: Author, +{avatar}: git-avatar
+            Avatar           = ' by `@+{author}` +{avatar-img}';
+            Break            = '!{broken} *BREAKING CHANGE* ';
+            Breaking         = '&{_B}';
+            Change           = '[Change Type: &{_C}+{change}] => ';
+            IssueLink        = ' \<+{issue-link}\>';
+            Highlights       = ":sparkles: HIGHLIGHTS";
+            HighlightDummy   = "+ Lorem ipsum dolor sit amet";
+            Meta             = ' (Id: +{commitid-link})?{issue-link;issueLinkStmt}'; # issue-link must be conditional
+            Commit           = '+ ?{is-breaking;breakStmt}?{is-squashed;squashedStmt}*{changeStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
+            DirtyCommit      = "+ ?{is-breaking;breakingStmt}+{subject}";
+            Dirty            = '!{dirty}';
+            Scope            = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
+            Squashed         = 'SQUASHED: ';
+            Subject          = 'Subject: **+{subject}**';
+            Type             = 'Commit-Type(&{_T} +{type})';
+            Ungrouped        = "UNGROUPED!";
           }
           Warnings   = [PSCustomObject]@{
             PSTypeName = 'Klassy.PoShLog.Options.Output.Warnings';
@@ -1463,21 +1472,28 @@ Describe 'PoShLog' -Tag 'plog' {
             Write-Debug $("OnHeading('$($headingType)'): decorated path: '$($segmentInfo.DecoratedPath)'");
           }
 
+          [scriptblock]$script:_OnSection = {
+            [OutputType([string])]
+            param(
+              [string]$sectionName,
+              [string]$titleStmt,
+              [string[]]$content,
+              [System.Management.Automation.PSTypeName('Klassy.PoShLog.SegmentInfo')]$segmentInfo,
+              [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$tagInfo,
+              [GeneratorUtils]$utils,
+              [System.Management.Automation.PSTypeName('Klassy.PoShLog.WalkInfo')]$custom
+            )
+            Write-Debug $("OnSection('$($sectionName)'): statement: '$($titleStmt)'");
+          }
+
           [PSCustomObject]$script:_handlers = [PSCustomObject]@{
             PSTypeName = 'Klassy.PoShLog.Handlers';
           }
 
-          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnHeading' -Value $(
-            $_OnHeading
-          );
-
-          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnCommit' -Value $(
-            $_OnCommit
-          );
-
-          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnEndBucket' -Value $(
-            $_OnEndBucket
-          );
+          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnHeading' -Value $($_OnHeading);
+          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnSection' -Value $($_OnSection);
+          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnCommit' -Value $($_OnCommit);
+          $_handlers | Add-Member -MemberType ScriptMethod -Name 'OnEndBucket' -Value $($_OnEndBucket);
         }
       } # BeforeEach
 
@@ -1886,7 +1902,7 @@ Describe 'PoShLog' -Tag 'plog' {
       } # given: config error
     } # Evaluate
 
-    Context 'CreateIsaLookup' -Tag 'Current' {
+    Context 'CreateIsaLookup' {
       Context 'given: simple parent' {
         It 'should: return remapped value' {
           [hashtable]$optionTypes = @{
