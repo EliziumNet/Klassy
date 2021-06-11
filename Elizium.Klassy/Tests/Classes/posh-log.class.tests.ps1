@@ -43,7 +43,68 @@ Describe 'PoShLog' -Tag 'plog' {
         )
       )
 
-      [string[]]$script:_excludes = @()
+      [string[]]$script:_excludes = @();
+      [string]$script:delim = "`t";
+
+      [array]$script:_feed = @( # from..until 
+        # 3.0.2..HEAD (unreleased)
+        #
+        $("2021-04-19 18:20:49 +01:00$($delim)9cadab32fd3feb3996ca933ddd2a751ae28e641a$($delim)plastikfan$($delim)fix(foo): #999 Merge branch 'release/3.0.2'"),
+
+        # 3.0.1..3.0.2
+        #
+        $("2021-04-19 18:17:15 +01:00$($delim)7bd92c2e3476687311e9cb0e75218ace1a7ef5ce$($delim)plastikfan$($delim)Bump version to 3.0.2"),
+        $("2021-04-19 17:10:14 +01:00$($delim)23e25cbff58be51c173bb807f49fed78ad289cdf$($delim)plastikfan$($delim)fix(signals)!: #151 Change Test-HostSupportsEmojis to return false for mac & linux"),
+
+        # 3.0.0..3.0.1
+        #
+        $("2021-04-19 16:17:04 +01:00$($delim)dc800c68e4aaa6be692c8254490945ad73f69e6d$($delim)plastikfan$($delim)feat(pstools): #145 Allow command to be invoked with the Name parameter instead of using pipeline"),
+        $("2021-04-19 16:23:44 +01:00$($delim)b2eef128d0ebc3b9775675a3b6481f0eb41a79e6$($delim)plastikfan$($delim)Merge branch 'feature/change-command-pipeline-invocation'"),
+        $("2021-04-19 13:25:29 +01:00$($delim)283093511fb2f67b4026e6b319b87acf5b2eac49$($delim)plastikfan$($delim)chore(pstools): #147 get-CommandDetail is now an internal function"),
+
+        # 2.0.0..3.0.0
+        #
+        $("2021-04-15 13:24:57 +01:00$($delim)d227403012774896857387d9f11e7d35d36b703b$($delim)plastikfan$($delim)(doc #127): Minor docn tweaks"),
+        $("2021-04-15 09:53:47 +01:00$($delim)b4bdc4b507f50e3a0a953ce2f167415f4fff78a0$($delim)plastikfan$($delim)(doc #127): Fix links in markdown"),
+        $("2021-04-15 16:57:41 +01:00$($delim)b0c917486bc71056622d22bc763abcf7687db4d5$($delim)plastikfan$($delim)(fix #64)!: Add Trigger count to Summary"),
+        $("2021-04-15 12:09:19 +01:00$($delim)b055f0b43d1c0518b36b9fa48d23baeac03e55e2$($delim)plastikfan$($delim)(doc #127): Add boostrap docn"),
+        $("2021-04-15 09:21:51 +01:00$($delim)31277e6725a753a20d80d3504615fbdb16344a22$($delim)plastikfan$($delim)(doc #127): Add docn for Test-IsAlreadyAnchoredAt"),
+
+        # 1.2.0..2.0.0
+        #
+        $("2021-01-15 08:57:53 +00:00$($delim)fe2db959f9b1e8fd902b080b44a5508adeebaeb9$($delim)plastikfan$($delim)(fix #98):Select-Patterns; When no filter supplied and LOOPZ_GREPS_FILTER not defined, default to ./*.*"),
+        $("2021-01-15 08:59:36 +00:00$($delim)8e04f6c75325ddd7cb66303f71501ec26aac07ae$($delim)plastikfan$($delim)feature/fix-select-text-env-var-not-def"),
+        $("2021-01-14 20:20:02 +00:00$($delim)54db603182807ef213b111519fd05b547cc5ea1e$($delim)plastikfan$($delim)(fix #98): Rename Select-Text to Select-Patterns"),
+        $("2021-01-14 19:52:13 +00:00$($delim)193df3a22c60fe1d6a06b2cf9771968bbf0b0490$($delim)plastikfan$($delim)(doc #89): fix typos in README"),
+
+        # 1.1.1..1.2.0
+        #
+        $("2020-09-03 13:45:41 +01:00$($delim)e280dea7daea7ae99f7517c876f05ef138538e02$($delim)plastikfan$($delim)(fix #34): Make tests platform friendly (break on first item)"),
+        $("2020-09-16 22:49:55 +01:00$($delim)ab3a9579019b7800c06e95f5af7e3683b321de9c$($delim)plastikfan$($delim)(fix #36): Add controller tests"),
+        $("2020-09-17 11:29:13 +01:00$($delim)7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c$($delim)plastikfan$($delim)(fix #36): Minor controller/test improvements"),
+        $("2020-09-16 15:11:29 +01:00$($delim)5130be22558649f5a7ba69689d7416a29b288d40$($delim)plastikfan$($delim)(fix #36): Fix New-Controller parameter sets"),
+        $("2020-09-03 12:50:33 +01:00$($delim)22287029a3a86f1f2c9cd73433075ec8a1d543f3$($delim)plastikfan$($delim)(fix #34)!: Fix Tests broken on mac"),
+
+        # 1.1.0..1.1.1
+        #
+        $("2020-08-31 11:50:59 +01:00$($delim)fac0998be058cc00398066b333516c9aea4c61c4$($delim)plastikfan$($delim)(fix #35): Catch the MethodInvocationException"),
+        $("2020-08-29 16:35:01 +01:00$($delim)379aefde5a2cd10dcc6d19e2e07691e9d8c74c80$($delim)plastikfan$($delim)(fix: #34): Use WhatIf appropriately (not on directory creation)"),
+        $("2020-08-29 10:01:25 +01:00$($delim)15eeb4c2098060afb68e28bf04dd88c5dbc19366$($delim)plastikfan$($delim)(fix: #33): remove incorrect parameter validation on FuncteeParams"),
+        $("2020-09-02 16:37:01 +01:00$($delim)124ae0e81d4e8af762a986c24d0f8c2609f3b694$($delim)plastikfan$($delim)fix Analyse task"),
+        $("2020-08-29 16:36:27 +01:00$($delim)06d055c6a79062439596c42ecf63a0f5ee42ee8d$($delim)plastikfan$($delim)Merge branch 'feature/fix-mirror-whatif"),
+
+        # 1.0.1..1.1.0
+        #
+        $("2020-08-21 14:19:37 +01:00$($delim)fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f$($delim)plastikfan$($delim)Merge branch 'feature/fix-utility-globals"),
+        $("2020-08-21 16:30:25 +01:00$($delim)abc321c70f16627d1f657cbdee99de89f21c27c8$($delim)plastikfan$($delim)rename edit-RemoveSingleSubString.tests.ps1"),
+        $("2020-08-21 14:08:07 +01:00$($delim)a055776bebc1c1fa7a329f7df6c6d946c17431f4$($delim)plastikfan$($delim)(feat #24): dont add files to FunctionsToExport if they are not of the form verb-noun"),
+        $("2020-08-21 19:13:17 +01:00$($delim)5e2b4279b0775cfa1fbf9032691ca910ed4c7979$($delim)plastikfan$($delim)(feat #24): Export functions and variables properly via psm"),
+
+        # 1.0.0..1.0.1
+        #
+        $("2020-08-17 13:59:08 +01:00$($delim)3884bbec11f622f0c5ea8474049a891c02e0eb09$($delim)plastikfan$($delim)(feat #20): Rm ITEM-VALUE/PROPERTIES; use Pairs instead; Partial check"),
+        $("2020-08-18 15:14:21 +01:00$($delim)11120d3c4ec110123417fcb36423403486d02275$($delim)plastikfan$($delim)Bump version to 1.0.1")
+      );
     }
   }
 
@@ -52,6 +113,99 @@ Describe 'PoShLog' -Tag 'plog' {
     #
     InModuleScope Elizium.Klassy {
 
+      class TagData {
+        [DateTime]$DAT;
+        [string]$TimeStamp;
+        [string]$Label;
+
+        TagData([string]$label, [string]$timestamp) {
+          $this.Label = $label;
+          $this.TimeStamp = $timestamp;
+          $this.DAT = [DateTime]::Parse($timestamp);
+        }
+      }
+
+      [TagData]$script:_headTagData = [TagData]::new('HEAD', '2021-04-19 18:20:49 +0100');
+
+      [hashtable]$script:_tags = @{
+        '3.0.2' = [TagData]::new('3.0.2', '2021-04-19 18:17:15 +0100');
+        '3.0.1' = [TagData]::new('3.0.1', '2021-04-19 16:32:22 +0100');
+        '3.0.0' = [TagData]::new('3.0.0', '2021-04-15 19:30:42 +0100');
+        '2.0.0' = [TagData]::new('2.0.0', '2021-01-18 16:06:43 +0000');
+        '1.2.0' = [TagData]::new('1.2.0', '2020-09-17 20:07:59 +0100');
+        '1.1.1' = [TagData]::new('1.1.1', '2020-09-02 16:40:04 +0100');
+        '1.1.0' = [TagData]::new('1.1.0', '2020-08-21 19:20:22 +0100');
+        '1.0.1' = [TagData]::new('1.0.1', '2020-08-18 15:14:21 +0100');
+        '1.0.0' = [TagData]::new('1.0.0', '2020-08-18 14:44:59 +0100');
+      }
+
+      [hashtable]$script:_overrides = @{
+        'ReadHeadDate' = [scriptblock] {
+          return $_headTagData.TimeStamp;
+        }
+
+        'ReadLogTags'  = [scriptblock] {
+
+          [array]$result = $_tags.PSBase.Keys | Sort-Object -Descending | ForEach-Object {
+            [string]$timestamp = $_tags[$_].TimeStamp;
+
+            "$($timestamp)  (tag: $_)"; # eg: '2021-04-19 18:20:49 +0100  (tag: HEAD)'
+          }
+
+          return $result;
+        }
+
+        'ReadLogRange' = [scriptblock] {
+          param(
+            [Parameter()]
+            [string]$range,
+
+            [Parameter()]
+            [string]$format
+          )
+          [regex]$rangeRegex = [regex]::new('^(?:(?<from>\d\.\d\.\d)\.{2})?(?<until>\d\.\d\.\d|HEAD)$');
+          [regex]$dateTimeRegex = [regex]::new('^(?<date>\d{4}-\d{2}-\d{2}) (?<time>\d{2}:\d{2}:\d{2})\s(?:\+\d{2}:\d{2})?');
+
+          [array]$result = if ($rangeRegex.IsMatch($range)) {
+            [System.Text.RegularExpressions.Match]$mRg = $rangeRegex.Match($range)?[0];
+            [System.Text.RegularExpressions.GroupCollection]$groupsRg = $mRg.Groups;
+
+            $_feed | Where-Object {
+              [System.Text.RegularExpressions.Match]$mDt = $dateTimeRegex.Match($_)?[0];
+              [System.Text.RegularExpressions.GroupCollection]$groupsDt = $mDt.Groups;
+
+              [DateTime]$commitDate = [DateTime]::Parse($groupsDt['0'].Value);
+
+              if ($groupsRg['from'].Success -and $groupsRg['until'].Success) {
+                [DateTime]$fromDate = $_tags[$($groupsRg['from'].Value)].DAT;
+                [DateTime]$untilDate = $groupsRg['until'].Value -eq 'HEAD' ? `
+                  $_headTagData.DAT : $_tags[$($groupsRg['until'].Value)].DAT;
+
+                ($commitDate.Ticks -gt $fromDate.Ticks) -and ($commitDate.Ticks -le $untilDate.Ticks);
+              }
+              elseif ($groupsRg['until'].Success) {
+                [DateTime]$untilDate = $groupsRg['until'].Value -eq 'HEAD' ? `
+                  $_headTagData.DAT : $_tags[$($groupsRg['until'].Value)].DAT;
+                ($commitDate.Ticks -le $untilDate.Ticks);
+              }
+              else {
+                $false;
+              }
+            }
+          }
+          else {
+            @();
+          }
+
+          return $result;
+        }
+
+        'ReadRemote'   = [scriptblock] {
+          return 'https://github.com/EliziumNet/Klassy';          
+        }
+      }
+
+      
       # The options object should be persisted to the current directory. The user
       # should run in the repo root
       #
@@ -219,26 +373,26 @@ Describe 'PoShLog' -Tag 'plog' {
             Uncategorised = 'uncategorised';
           }
           Statements = [PSCustomObject]@{ # => '*'
-            PSTypeName       = 'Klassy.PoShLog.Options.Output.Statements';
+            PSTypeName     = 'Klassy.PoShLog.Options.Output.Statements';
             #
-            ActiveScope      = "+{scope}";
-            Author           = ' by `@+{author}` &{_A}'; # &{_A}: Author, +{avatar}: git-avatar
-            Avatar           = ' by `@+{author}` +{avatar-img}';
-            Break            = '!{broken} *BREAKING CHANGE* ';
-            Breaking         = '&{_B}';
-            Change           = '[Change Type: &{_C}+{change}] => ';
-            IssueLink        = ' \<+{issue-link}\>';
-            Highlights       = ":sparkles: HIGHLIGHTS";
-            HighlightDummy   = "+ Lorem ipsum dolor sit amet";
-            Meta             = ' (Id: +{commitid-link})?{issue-link;issueLinkStmt}'; # issue-link must be conditional
-            Commit           = '+ ?{is-breaking;breakStmt}?{is-squashed;squashedStmt}*{changeStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
-            DirtyCommit      = "+ ?{is-breaking;breakingStmt}+{subject}";
-            Dirty            = '!{dirty}';
-            Scope            = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
-            Squashed         = 'SQUASHED: ';
-            Subject          = 'Subject: **+{subject}**';
-            Type             = 'Commit-Type(&{_T} +{type})';
-            Ungrouped        = "UNGROUPED!";
+            ActiveScope    = "+{scope}";
+            Author         = ' by `@+{author}` &{_A}'; # &{_A}: Author, +{avatar}: git-avatar
+            Avatar         = ' by `@+{author}` +{avatar-img}';
+            Break          = '!{broken} *BREAKING CHANGE* ';
+            Breaking       = '&{_B}';
+            Change         = '[Change Type: &{_C}+{change}] => ';
+            IssueLink      = ' \<+{issue-link}\>';
+            Highlights     = ":sparkles: HIGHLIGHTS";
+            HighlightDummy = "+ Lorem ipsum dolor sit amet";
+            Meta           = ' (Id: +{commitid-link})?{issue-link;issueLinkStmt}'; # issue-link must be conditional
+            Commit         = '+ ?{is-breaking;breakStmt}?{is-squashed;squashedStmt}*{changeStmt}*{subjectStmt}*{avatarStmt}*{metaStmt}';
+            DirtyCommit    = "+ ?{is-breaking;breakingStmt}+{subject}";
+            Dirty          = '!{dirty}';
+            Scope          = 'Scope(&{_S}?{scope;activeScopeStmt;Uncategorised})';
+            Squashed       = 'SQUASHED: ';
+            Subject        = 'Subject: **+{subject}**';
+            Type           = 'Commit-Type(&{_T} +{type})';
+            Ungrouped      = "UNGROUPED!";
           }
           Warnings   = [PSCustomObject]@{
             PSTypeName = 'Klassy.PoShLog.Options.Output.Warnings';
@@ -260,416 +414,41 @@ Describe 'PoShLog' -Tag 'plog' {
         Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
       }
 
-      # === [ FakeGit ] ==============================================================
-      # (can't suppress this TypeNotFound warning on SourceControl)
-      # https://github.com/PowerShell/PSScriptAnalyzer/issues/1584
-      #
-      class FakeGit : SourceControl {
-        [PSCustomObject]$_headTag;
+      function script:New-TestChangeLog {
+        param(
+          [Parameter()]
+          [PSCustomObject]$Options,
 
-        FakeGit([PSCustomObject]$options, [PSCustomObject]$head): base($options) {
+          [Parameter()]
+          [hashtable]$Overrides
+        )
+        [ProxyGit]$proxy = [ProxyGit]::new();
+        [array]$members = ($proxy | Get-Member -MemberType Property).Name;
 
-          $this._headTag = $head;
-          $this._headDate = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
-        }
+        $Overrides.PSBase.Keys | ForEach-Object {
+          [string]$name = $_;
 
-        [PSCustomObject[]] ReadGitTags([boolean]$includeHead) {
-          [PSCustomObject[]]$tags = (@(
-              @('3.0.2', ([DateTime]::Parse('2021-04-19 18:17:15 +0100'))),
-              @('3.0.1', ([DateTime]::Parse('2021-04-19 16:32:22 +0100'))),
-              @('3.0.0', ([DateTime]::Parse('2021-04-15 19:30:42 +0100'))),
-              @('2.0.0', ([DateTime]::Parse('2021-01-18 16:06:43 +0000'))),
-              @('1.2.0', ([DateTime]::Parse('2020-09-17 20:07:59 +0100'))),
-              @('1.1.1', ([DateTime]::Parse('2020-09-02 16:40:04 +0100'))),
-              @('1.1.0', ([DateTime]::Parse('2020-08-21 19:20:22 +0100'))),
-              @('1.0.1', ([DateTime]::Parse('2020-08-18 15:14:21 +0100'))),
-              @('1.0.0', ([DateTime]::Parse('2020-08-18 14:44:59 +0100')))
-            ) | ForEach-Object {
-              [PSCustomObject]@{
-                PSTypeName = 'Klassy.PoShLog.TagInfo';
-                Label      = $_[0];
-                Date       = $_[1];
-                Version    = [system.version]::new($_[0]);
-              }
-            });
-
-          if ($includeHead) {
-            $tags = @(, $this._headTag) + $tags;
-          }
-
-          return $tags;
-        }
-
-        [PSCustomObject[]] ReadGitCommitsInRange(
-          [string]$Format,
-          [string]$Range,
-          [string[]]$Header,
-          [string]$Delim
-        ) {
-          [hashtable]$commitFeed = @{
-            # 3.0.2..HEAD (unreleased)
-            #
-            '3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a'  = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
-              CommitId   = '9cadab32fd3feb3996ca933ddd2a751ae28e641a';
-              Author     = 'plastikfan';
-              Subject    = "fix(foo): #999 Merge branch 'release/3.0.2'";
-            };
-
-            # 3.0.1..3.0.2
-            #
-            '3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-19 18:17:15 +0100');
-              CommitId   = '7bd92c2e3476687311e9cb0e75218ace1a7ef5ce';
-              Author     = 'plastikfan';
-              Subject    = "Bump version to 3.0.2";
-            };
-
-            '3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-19 17:10:14 +0100');
-              CommitId   = '23e25cbff58be51c173bb807f49fed78ad289cdf';
-              Author     = 'plastikfan';
-              Subject    = "fix(signals)!: #151 Change Test-HostSupportsEmojis to return false for mac & linux";
-            }
-
-            # 3.0.0..3.0.1
-            #
-            '3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-19 16:23:44 +0100');
-              CommitId   = 'b2eef128d0ebc3b9775675a3b6481f0eb41a79e6';
-              Author     = 'plastikfan';
-              Subject    = "Merge branch 'feature/change-command-pipeline-invocation'";
-            };
-
-            '3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-19 16:17:04 +0100');
-              CommitId   = 'dc800c68e4aaa6be692c8254490945ad73f69e6d';
-              Author     = 'plastikfan';
-              Subject    = "feat(pstools): #145 Allow command to be invoked with the Name parameter instead of using pipeline";
-            };
-
-            '3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-19 13:25:29 +0100');
-              CommitId   = '283093511fb2f67b4026e6b319b87acf5b2eac49';
-              Author     = 'plastikfan';
-              Subject    = "chore(pstools): #147 get-CommandDetail is now an internal function";
-            };
-
-            # 2.0.0..3.0.0
-            #
-            '2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-15 16:57:41 +0100');
-              CommitId   = 'b0c917486bc71056622d22bc763abcf7687db4d5';
-              Author     = 'plastikfan';
-              Subject    = "(fix #64)!: Add Trigger count to Summary";
-            };
-
-            '2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-15 13:24:57');
-              CommitId   = 'd227403012774896857387d9f11e7d35d36b703b';
-              Author     = 'plastikfan';
-              Subject    = "(doc #127): Minor docn tweaks";
-            };
-
-            '2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-15 12:09:19 +0100');
-              CommitId   = 'b055f0b43d1c0518b36b9fa48d23baeac03e55e2';
-              Author     = 'plastikfan';
-              Subject    = "(doc #127): Add boostrap docn";
-            };
-
-            '2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-15 09:53:47 +0100');
-              CommitId   = 'b4bdc4b507f50e3a0a953ce2f167415f4fff78a0';
-              Author     = 'plastikfan';
-              Subject    = "(doc #127): Fix links in markdown";
-            };
-
-            '2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-04-15 09:21:51 +0100');
-              CommitId   = '31277e6725a753a20d80d3504615fbdb16344a22';
-              Author     = 'plastikfan';
-              Subject    = "(doc #127): Add docn for Test-IsAlreadyAnchoredAt";
-            };
-
-            # 1.2.0..2.0.0
-            #
-            '1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-01-15 08:59:36');
-              CommitId   = '8e04f6c75325ddd7cb66303f71501ec26aac07ae';
-              Author     = 'plastikfan';
-              Subject    = "feature/fix-select-text-env-var-not-def";
-            };
-
-            '1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-01-15 08:57:53');
-              CommitId   = 'fe2db959f9b1e8fd902b080b44a5508adeebaeb9';
-              Author     = 'plastikfan';
-              Subject    = "(fix #98):Select-Patterns; When no filter supplied and LOOPZ_GREPS_FILTER not defined, default to ./*.*";
-            };
-
-            '1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-01-14 20:20:02');
-              CommitId   = '54db603182807ef213b111519fd05b547cc5ea1e';
-              Author     = 'plastikfan';
-              Subject    = "(fix #98): Rename Select-Text to Select-Patterns";
-            };
-
-            '1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2021-01-14 19:52:13');
-              CommitId   = '193df3a22c60fe1d6a06b2cf9771968bbf0b0490';
-              Author     = 'plastikfan';
-              Subject    = "(doc #89): fix typos in README";
-            };
-
-            # 1.1.1..1.2.0
-            #
-            '1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-09-17 11:29:13');
-              CommitId   = '7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c';
-              Author     = 'plastikfan';
-              Subject    = "(fix #36): Minor controller/test improvements";
-            };
-
-            '1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-09-16 22:49:55');
-              CommitId   = 'ab3a9579019b7800c06e95f5af7e3683b321de9c';
-              Author     = 'plastikfan';
-              Subject    = "(fix #36): Add controller tests";
-            };
-
-            '1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-09-16 15:11:29 +0100');
-              CommitId   = '5130be22558649f5a7ba69689d7416a29b288d40';
-              Author     = 'plastikfan';
-              Subject    = "(fix #36): Fix New-Controller parameter sets";
-            };
-
-            '1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-09-03 13:45:41 +0100');
-              CommitId   = 'e280dea7daea7ae99f7517c876f05ef138538e02';
-              Author     = 'plastikfan';
-              Subject    = "(fix #34): Make tests platform friendly (break on first item)";
-            };
-
-            '1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-09-03 12:50:33 +0100');
-              CommitId   = '22287029a3a86f1f2c9cd73433075ec8a1d543f3';
-              Author     = 'plastikfan';
-              Subject    = "(fix #34)!: Fix Tests broken on mac";
-            };
-
-            # 1.1.0..1.1.1
-            #
-            '1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-09-02 16:37:01 +0100');
-              CommitId   = '124ae0e81d4e8af762a986c24d0f8c2609f3b694';
-              Author     = 'plastikfan';
-              Subject    = "fix Analyse task";
-            };
-
-            '1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-31 11:50:59 +0100');
-              CommitId   = 'fac0998be058cc00398066b333516c9aea4c61c4';
-              Author     = 'plastikfan';
-              Subject    = "(fix #35): Catch the MethodInvocationException";
-            };
-
-            '1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-29 16:36:27 +0100');
-              CommitId   = '06d055c6a79062439596c42ecf63a0f5ee42ee8d';
-              Author     = 'plastikfan';
-              Subject    = "Merge branch 'feature/fix-mirror-whatif";
-            };
-
-            '1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-29 16:35:01 +0100');
-              CommitId   = '379aefde5a2cd10dcc6d19e2e07691e9d8c74c80';
-              Author     = 'plastikfan';
-              Subject    = "(fix: #34): Use WhatIf appropriately (not on directory creation)";
-            };
-
-            '1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-29 10:01:25 +0100');
-              CommitId   = '15eeb4c2098060afb68e28bf04dd88c5dbc19366';
-              Author     = 'plastikfan';
-              Subject    = "(fix: #33): remove incorrect parameter validation on FuncteeParams";
-            };
-
-            # 1.0.1..1.1.0
-            #
-            '1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-21 19:13:17 +0100');
-              CommitId   = '5e2b4279b0775cfa1fbf9032691ca910ed4c7979';
-              Author     = 'plastikfan';
-              Subject    = "(feat #24): Export functions and variables properly via psm";
-            };
-
-            '1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-21 16:30:25 +0100');
-              CommitId   = 'abc321c70f16627d1f657cbdee99de89f21c27c8';
-              Author     = 'plastikfan';
-              Subject    = "rename edit-RemoveSingleSubString.tests.ps1";
-            };
-
-            '1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-21 14:19:37 +0100');
-              CommitId   = 'fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f';
-              Author     = 'plastikfan';
-              Subject    = "Merge branch 'feature/fix-utility-globals";
-            };
-
-            '1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-21 14:08:07 +0100');
-              CommitId   = 'a055776bebc1c1fa7a329f7df6c6d946c17431f4';
-              Author     = 'plastikfan';
-              Subject    = "(feat #24): dont add files to FunctionsToExport if they are not of the form verb-noun";
-            };
-
-            # 1.0.0..1.0.1
-            #
-            '1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275' = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-18 15:14:21 +0100');
-              CommitId   = '11120d3c4ec110123417fcb36423403486d02275';
-              Author     = 'plastikfan';
-              Subject    = "Bump version to 1.0.1";
-            }
-
-            # 1.0.0 
-            #
-            '1.0.0/3884bbec11f622f0c5ea8474049a891c02e0eb09'        = [PSCustomObject]@{
-              PSTypeName = 'Klassy.PoShLog.CommitInfo';
-              Date       = [DateTime]::Parse('2020-08-17 13:59:08 +0100');
-              CommitId   = '3884bbec11f622f0c5ea8474049a891c02e0eb09';
-              Author     = 'plastikfan';
-              Subject    = "(feat #20): Rm ITEM-VALUE/PROPERTIES; use Pairs instead; Partial check";
-            }
-          }
-
-
-          [hashtable]$commitsByTag = @{
-            '3.0.2..HEAD'  = @(
-              $commitFeed['3.0.2..HEAD/9cadab32fd3feb3996ca933ddd2a751ae28e641a']
-            );
-
-            '3.0.1..3.0.2' = @(
-              $commitFeed['3.0.1..3.0.2/7bd92c2e3476687311e9cb0e75218ace1a7ef5ce'],
-              $commitFeed['3.0.1..3.0.2/23e25cbff58be51c173bb807f49fed78ad289cdf']
-            );
-
-            '3.0.0..3.0.1' = @(
-              $commitFeed['3.0.0..3.0.1/b2eef128d0ebc3b9775675a3b6481f0eb41a79e6'],
-              $commitFeed['3.0.0..3.0.1/dc800c68e4aaa6be692c8254490945ad73f69e6d'],
-              $commitFeed['3.0.0..3.0.1/283093511fb2f67b4026e6b319b87acf5b2eac49']
-            );
-
-            '2.0.0..3.0.0' = @(
-              $commitFeed['2.0.0..3.0.0/b0c917486bc71056622d22bc763abcf7687db4d5'],
-              $commitFeed['2.0.0..3.0.0/d227403012774896857387d9f11e7d35d36b703b'],
-              $commitFeed['2.0.0..3.0.0/b055f0b43d1c0518b36b9fa48d23baeac03e55e2'],
-              $commitFeed['2.0.0..3.0.0/b4bdc4b507f50e3a0a953ce2f167415f4fff78a0'],
-              $commitFeed['2.0.0..3.0.0/31277e6725a753a20d80d3504615fbdb16344a22']
-            );
-
-            '1.2.0..2.0.0' = @(
-              $commitFeed['1.2.0..2.0.0/8e04f6c75325ddd7cb66303f71501ec26aac07ae'],
-              $commitFeed['1.2.0..2.0.0/fe2db959f9b1e8fd902b080b44a5508adeebaeb9'],
-              $commitFeed['1.2.0..2.0.0/54db603182807ef213b111519fd05b547cc5ea1e'],
-              $commitFeed['1.2.0..2.0.0/193df3a22c60fe1d6a06b2cf9771968bbf0b0490']
-            );
-
-            '1.1.1..1.2.0' = @(
-              $commitFeed['1.1.1..1.2.0/7e3c5d36e0bc83bdfbab4f2f8563468fcd88aa9c'],
-              $commitFeed['1.1.1..1.2.0/ab3a9579019b7800c06e95f5af7e3683b321de9c'],
-              $commitFeed['1.1.1..1.2.0/5130be22558649f5a7ba69689d7416a29b288d40'],
-              $commitFeed['1.1.1..1.2.0/e280dea7daea7ae99f7517c876f05ef138538e02'],
-              $commitFeed['1.1.1..1.2.0/22287029a3a86f1f2c9cd73433075ec8a1d543f3']
-            );
-
-            '1.1.0..1.1.1' = @(
-              $commitFeed['1.1.0..1.1.1/124ae0e81d4e8af762a986c24d0f8c2609f3b694'],
-              $commitFeed['1.1.0..1.1.1/fac0998be058cc00398066b333516c9aea4c61c4'],
-              $commitFeed['1.1.0..1.1.1/06d055c6a79062439596c42ecf63a0f5ee42ee8d'],
-              $commitFeed['1.1.0..1.1.1/379aefde5a2cd10dcc6d19e2e07691e9d8c74c80'],
-              $commitFeed['1.1.0..1.1.1/15eeb4c2098060afb68e28bf04dd88c5dbc19366']
-            );
-
-            '1.0.1..1.1.0' = @(
-              $commitFeed['1.0.1..1.1.0/5e2b4279b0775cfa1fbf9032691ca910ed4c7979'],
-              $commitFeed['1.0.1..1.1.0/abc321c70f16627d1f657cbdee99de89f21c27c8'],
-              $commitFeed['1.0.1..1.1.0/fa8aea14a6b63ddd4d9c08f8f0a00edbcf9d116f'],
-              $commitFeed['1.0.1..1.1.0/a055776bebc1c1fa7a329f7df6c6d946c17431f4']
-            );
-
-            '1.0.0..1.0.1' = @(
-              $commitFeed['1.0.0..1.0.1/11120d3c4ec110123417fcb36423403486d02275']
-            );
-
-            '1.0.0'        = @(
-              $commitFeed['1.0.0/3884bbec11f622f0c5ea8474049a891c02e0eb09']
-            )
-          }
-
-          [array]$commits = if ($commitsByTag.ContainsKey($Range)) {
-            $commitsByTag[$Range];
+          if ($members -contains $name) {
+            $proxy.$name = $Overrides[$name];
           }
           else {
-            throw "Failed: update commitsByTag to include range: '$Range'";
+            throw [System.Management.Automation.MethodInvocationException]::new(
+              "'$name' does not exist on Proxy"
+            );
           }
-          return $commits;
         }
 
-        [string] ReadRemoteUrl() {
-          return 'https://github.com/EliziumNet/Klassy'
-        }
-      } # FakeGit
-      function script:Get-TestChangeLog {
-        [OutputType([GroupBy])]
-        param(
-          [PSCustomObject]$Options
-        )
-
-        [SourceControl]$fakeGit = [FakeGit]::new($Options, $_head);
+        [Git]$git = [Git]::new($Options, $proxy);
         [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
         [MarkdownPoShLogGenerator]$generator = [MarkdownPoShLogGenerator]::new(
-          $Options, $fakeGit, $grouper
+          $Options, $git, $grouper
         );
-        [PoShLog]$changeLog = [PoShLog]::new($Options, $fakeGit, $grouper, $generator);
+        [PoShLog]$changeLog = [PoShLog]::new($Options, $git, $grouper, $generator);
 
         [PSCustomObject]$dependencies = [PSCustomObject]@{
           PSTypeName    = 'Klassy.PoShLog.Test.Dependencies'
           #
-          SourceControl = $fakeGit;
+          SourceControl = git;
           Grouper       = $grouper;
           Generator     = $generator;
         }
@@ -677,7 +456,7 @@ Describe 'PoShLog' -Tag 'plog' {
         return $changeLog, $dependencies;
       }
 
-      [PoShLog]$script:_changeLog, $null = Get-TestChangeLog -Options $_options;
+      [PoShLog]$script:_changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
 
       function script:Show-Releases {
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
@@ -743,11 +522,11 @@ Describe 'PoShLog' -Tag 'plog' {
         It 'should: return all tags' {
           InModuleScope Elizium.Klassy {
             $_changeLog.Init();
+
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 10;
-
-            $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
-            $result[9].Version.CompareTo([system.version]::new(1, 0, 0)) | Should -Be 0;
+            $result[1].Version.CompareTo([system.version]::new(3, 0, 2).ToString()) | Should -Be 0;
+            $result[9].Version.CompareTo([system.version]::new(1, 0, 0).ToString()) | Should -Be 0;
           }
         }
       } # and: full history
@@ -763,8 +542,8 @@ Describe 'PoShLog' -Tag 'plog' {
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 10;
 
-            $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
-            $result[9].Version.CompareTo([system.version]::new(1, 0, 0)) | Should -Be 0;
+            $result[1].Version.CompareTo([system.version]::new(3, 0, 2).ToString()) | Should -Be 0;
+            $result[9].Version.CompareTo([system.version]::new(1, 0, 0).ToString()) | Should -Be 0;
           }
         }
       } # and: full history (until = HEAD)
@@ -794,8 +573,8 @@ Describe 'PoShLog' -Tag 'plog' {
 
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 4;
-            $result[1].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
-            $result[3].Version.CompareTo([system.version]::new(3, 0, 0)) | Should -Be 0;
+            $result[1].Version.CompareTo([system.version]::new(3, 0, 2).ToString()) | Should -Be 0;
+            $result[3].Version.CompareTo([system.version]::new(3, 0, 0).ToString()) | Should -Be 0;
           }
         }
       } # and: since specified tag
@@ -810,8 +589,8 @@ Describe 'PoShLog' -Tag 'plog' {
 
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 7;
-            $result[0].Version.CompareTo([system.version]::new(3, 0, 0)) | Should -Be 0;
-            $result[6].Version.CompareTo([system.version]::new(1, 0, 0)) | Should -Be 0;
+            $result[0].Version.CompareTo([system.version]::new(3, 0, 0).ToString()) | Should -Be 0;
+            $result[6].Version.CompareTo([system.version]::new(1, 0, 0).ToString()) | Should -Be 0;
           }
         }
       } # and: until specified tag
@@ -827,13 +606,12 @@ Describe 'PoShLog' -Tag 'plog' {
 
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 3;
-            $result[0].Version.CompareTo([system.version]::new(3, 0, 2)) | Should -Be 0;
-            $result[2].Version.CompareTo([system.version]::new(3, 0, 0)) | Should -Be 0;
+            $result[0].Version.CompareTo([system.version]::new(3, 0, 2).ToString()) | Should -Be 0;
+            $result[2].Version.CompareTo([system.version]::new(3, 0, 0).ToString()) | Should -Be 0;
           }
         }
 
-
-        It 'should: return tags in range' {
+        It 'should: return tags in range' -Tag 'Current' {
           InModuleScope Elizium.Klassy {
             $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               From  = '1.1.1';
@@ -843,8 +621,8 @@ Describe 'PoShLog' -Tag 'plog' {
 
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 2;
-            $result[0].Version.CompareTo([system.version]::new(1, 2, 0)) | Should -Be 0;
-            $result[1].Version.CompareTo([system.version]::new(1, 1, 1)) | Should -Be 0;
+            $result[0].Version.CompareTo([system.version]::new(1, 2, 0).ToString()) | Should -Be 0;
+            $result[1].Version.CompareTo([system.version]::new(1, 1, 1).ToString()) | Should -Be 0;
           }
         }
 
@@ -857,7 +635,7 @@ Describe 'PoShLog' -Tag 'plog' {
 
             [PSCustomObject[]]$result = $_changeLog.GetTagsInRange();
             $result.Count | Should -Be 1;
-            $result[0].Version.CompareTo([system.version]::new(1, 0, 0)) | Should -Be 0;
+            $result[0].Version.CompareTo([system.version]::new(1, 0, 0).ToString()) | Should -Be 0;
           }
         }
       } # and: between 2 specified tags
@@ -877,7 +655,7 @@ Describe 'PoShLog' -Tag 'plog' {
           )
           $changeLog.Init();
 
-          [array]$tagsInRange = $_changeLog.TagsInRangeWithHead;
+          [array]$tagsInRange = $changeLog.TagsInRangeWithHead;
           [hashtable]$indexOfTag = @{};
 
           [string[]]$labelSequence = $tagsInRange.Label;
@@ -893,9 +671,9 @@ Describe 'PoShLog' -Tag 'plog' {
           }
         }
 
-        [PSCustomObject]$_result = initialize-WithTagIndices -changeLog $_changeLog;
-        [hashtable]$script:_indexOfTag = $_result.IndexOfTag;
-        [array]$script:_tagsInRange = $_result.TagsInRange;
+        [PSCustomObject]$result = initialize-WithTagIndices -changeLog $_changeLog;
+        [hashtable]$script:_indexOfTag = $result.IndexOfTag;
+        [array]$script:_tagsInRange = $result.TagsInRange;
       }
     }
 
@@ -996,7 +774,7 @@ Describe 'PoShLog' -Tag 'plog' {
       Context 'given: OrderBy descending' {
         Context 'and: IncludeMissingIssue enabled' {
           Context 'given: full history (no tags defined)' {
-            It 'should: return commits for all tags' -Tag 'Pending' {
+            It 'should: return commits for all tags' {
               InModuleScope Elizium.Klassy {
                 $_changeLog.Init();
 
@@ -1197,7 +975,7 @@ Describe 'PoShLog' -Tag 'plog' {
           It 'should: return commits for all tags' {
             InModuleScope Elizium.Klassy {
               $_options.Selection.SquashBy = [string]::Empty;
-              [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+              [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
               $changeLog.Init();
 
               [hashtable]$releases = $changeLog.processCommits();
@@ -1225,7 +1003,7 @@ Describe 'PoShLog' -Tag 'plog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'scope/type';
-            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1287,7 +1065,7 @@ Describe 'PoShLog' -Tag 'plog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'type/scope';
-            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1349,7 +1127,7 @@ Describe 'PoShLog' -Tag 'plog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'type';
-            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1381,7 +1159,7 @@ Describe 'PoShLog' -Tag 'plog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = 'scope';
-            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1411,7 +1189,7 @@ Describe 'PoShLog' -Tag 'plog' {
         It 'should: compose change log partitions' {
           InModuleScope Elizium.Klassy {
             $_options.Output.GroupBy = [string]::Empty;
-            [PoShLog]$changeLog, $null = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [array]$releases = $changeLog.composePartitions();
@@ -1504,7 +1282,7 @@ Describe 'PoShLog' -Tag 'plog' {
               InModuleScope Elizium.Klassy {
                 $_options.Output.GroupBy = 'scope/type';
 
-                [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+                [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
                 $changeLog.Init();
 
                 [array]$releases = $changeLog.composePartitions();
@@ -1528,7 +1306,7 @@ Describe 'PoShLog' -Tag 'plog' {
         Context 'given: full history (no tags defined)' {
           It 'should: generate content' {
             InModuleScope Elizium.Klassy {
-              [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
               $changeLog.Init();
 
               [array]$releases = $changeLog.composePartitions();
@@ -1551,7 +1329,7 @@ Describe 'PoShLog' -Tag 'plog' {
                 $_options.Output.GroupBy = [string]::Empty;
                 $_options.Output.Headings.H3 = '*{ungroupedStmt}';
 
-                [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+                [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
                 $changeLog.Init();
 
                 [array]$releases = $changeLog.composePartitions();
@@ -1569,7 +1347,7 @@ Describe 'PoShLog' -Tag 'plog' {
       Context 'given: MarkdownPoShLogGenerator.CreateComparisonLinks' {
         It 'should: generate content' {
           InModuleScope Elizium.Klassy {
-            [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [string]$content = $dependencies.Generator.CreateComparisonLinks(
@@ -1583,7 +1361,7 @@ Describe 'PoShLog' -Tag 'plog' {
       Context 'given: MarkdownPoShLogGenerator.CreateDisabledWarnings' {
         It 'should: generate content' {
           InModuleScope Elizium.Klassy {
-            [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+            [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
             $changeLog.Init();
 
             [string]$content = $dependencies.Generator.CreateDisabledWarnings();
@@ -1599,7 +1377,7 @@ Describe 'PoShLog' -Tag 'plog' {
       It 'should: Build real change log' {
         InModuleScope Elizium.Klassy {
           [PoShLog]$changeLog = New-PoShLog -Options $_options;
-          $_changeLog.Init();
+          $changeLog.Init();
 
           [string]$content = $changeLog.Build();
           $content | Should -Not -BeNullOrEmpty;
@@ -1664,7 +1442,7 @@ Describe 'PoShLog' -Tag 'plog' {
 
       Context 'given: commit' {
         Context 'and: Statement <statement>' {
-          It 'should: fully resolve to be "<expected>"' -TestCases @(
+          It 'should: fully resolve to be "<expected>"' -Tag 'Current' -TestCases @(
             @{
               Statement = 'AUTHOR:*{authorStmt}';
               Expected  = $(
@@ -1789,7 +1567,7 @@ Describe 'PoShLog' -Tag 'plog' {
                 [string]$statement,
                 [string]$expected
               )
-              [PoShLog]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
               $changeLog.Init();
 
               $_variables['avatar-img'] = $dependencies.Generator._utils.AvatarImg($_commit.Author);
@@ -1818,7 +1596,7 @@ Describe 'PoShLog' -Tag 'plog' {
 
       Context 'given: config error' {
         Context 'and: Statement <statement>' {
-          It 'should: should throw "<because>"' -TestCases @(
+          It 'should: should throw "<because>"' -Tag 'Current' -TestCases @(
             @{
               Statement = '*{blooperStmt}';
               Because   = "'blooperStmt' is not a defined statement";
@@ -1844,7 +1622,7 @@ Describe 'PoShLog' -Tag 'plog' {
                 [string]$statement,
                 [string]$because
               )
-              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
               $changeLog.Init();
 
               $_variables['avatar-img'] = $dependencies.Generator._utils.AvatarImg($_commit.Author);
@@ -1867,7 +1645,7 @@ Describe 'PoShLog' -Tag 'plog' {
                 Break      = '*{breakStmt} *BREAKING CHANGE* ';
               }
               [string]$statement = $_options.Output.Statements.Break;
-              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $_overrides;
               $changeLog.Init();
 
               {
@@ -1888,7 +1666,7 @@ Describe 'PoShLog' -Tag 'plog' {
                 Break      = '?{is-breaking;breakStmt} *BREAKING CHANGE* ';
               }
               [string]$statement = $_options.Output.Statements.Break;
-              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = Get-TestChangeLog -Options $_options;
+              [PSCustomObject]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Override $_overrides;
               $changeLog.Init();
 
               {
@@ -1958,6 +1736,47 @@ Describe 'PoShLog' -Tag 'plog' {
       }
     }
   } # GeneratorUtils
+
+  Describe 'ProxyGit' {
+    BeforeEach {
+      [ProxyGit]$script:_realGitProxy = [ProxyGit]::new();
+    }
+
+    Context 'given: HeadDate' {
+      It 'should: invoke ok' {
+        [string]$result = $_realGitProxy.HeadDate();
+        $result | Should -Not -BeNullOrEmpty $result;
+      }
+    }
+
+    Context 'given: LogTags' {
+      It 'should: invoke ok' {
+        [array]$result = $_realGitProxy.LogTags();
+        $result | Should -Not -BeNullOrEmpty $result;
+      }
+    }
+
+    Context 'given: LogRange' {
+      It 'should: invoke ok' {
+        [array]$result = $_realGitProxy.LogRange('HEAD', "%ai$($delim)%H$($delim)%an$($delim)%s");
+        $result | Should -Not -BeNullOrEmpty $result;
+      }
+    }
+
+    Context 'given: Remote' {
+      It 'should: invoke ok' {
+        [string]$result = $_realGitProxy.Remote();
+        $result | Should -Not -BeNullOrEmpty $result;
+      }
+    }
+
+    Context 'given: Root' {
+      It 'should: invoke ok' {
+        [string]$result = $_realGitProxy.Root();
+        $result | Should -Not -BeNullOrEmpty $result;
+      }
+    }
+  }
 
   Describe 'PoShLogOptionsManager' {
     Context 'given: requested <name> options does exist' {

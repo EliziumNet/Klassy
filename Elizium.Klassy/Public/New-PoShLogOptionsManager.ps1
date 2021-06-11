@@ -1,10 +1,17 @@
 
 function New-PoShLogOptionsManager {
   param(
-    [PSCustomObject]$OptionsInfo
+    [Parameter()]
+    [PSCustomObject]$OptionsInfo,
+
+    [Parameter()]
+    [ProxyGit]$Proxy
   )
 
-  [PoShLogOptionsManager]$manager = [PoShLogOptionsManager]::new($OptionsInfo);
+  [PoShLogOptionsManager]$manager = [PoShLogOptionsManager]::new(
+    $Proxy ?? [ProxyGit]::new(),
+    $OptionsInfo
+  );
   $manager.Init();
 
   return $manager;

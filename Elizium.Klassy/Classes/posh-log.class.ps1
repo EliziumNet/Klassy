@@ -175,7 +175,11 @@ class Git : SourceControl {
   #
   hidden [System.Management.Automation.CommandInfo]$_gitCi;
 
-  Git([PSCustomObject]$options): base($options) {
+  [ProxyGit]$Proxy;
+
+  Git([PSCustomObject]$options, [ProxyGit]$proxy): base($options) {
+    $this.Proxy = $proxy;
+
     # Just check that git is available
     # TODO: check the digital signature
     # https://mcpmag.com/articles/2018/07/25/file-signatures-using-powershell.aspx
@@ -191,8 +195,8 @@ class Git : SourceControl {
     # %ai = author date, ISO 8601-like format
     # eg: '2021-04-19 18:20:49 +0100'
     #
-    [string]$head = $(git log -n 1 --format=%ai);
-    $this._headDate = [DateTime]::Parse($head);
+    [string]$head = $this.Proxy.HeadDate();
+    $this._headDate = [DateTime]::Parse($head);    
   } # ctor.Git
 
   [PSCustomObject[]] ReadGitTags([boolean]$includeHead) {
@@ -200,7 +204,7 @@ class Git : SourceControl {
     # %d: ref names
     # eg: '2021-04-19 18:17:15 +0100  (tag: 3.0.2)'
     #
-    [array]$tags = (git log --tags --simplify-by-decoration --pretty="format:%ci %d") -match 'tag:';
+    [array]$tags = $this.Proxy.LogTags();
     return $this.processTags($tags, $includeHead);
   } # ReadGitTags
 
@@ -214,7 +218,7 @@ class Git : SourceControl {
   ) {
     Write-Debug "ReadGitCommitsInRange: RANGE: '$($Range)', FORMAT: '$($Format)'.";
 
-    $commitContent = (git log $Range --format=$Format);
+    [array]$commitContent = $this.Proxy.LogRange($Range, $Format);
     [array]$result = $commitContent | ConvertFrom-Csv -Delimiter $Delim -Header $Header;
 
     $result | Where-Object { $null -ne $_.CommitId } | ForEach-Object {
@@ -231,7 +235,7 @@ class Git : SourceControl {
   } # ReadGitCommitsInRange
 
   [string] ReadRemoteUrl() {
-    [string]$url = (git remote get-url origin) -replace '\.git$';
+    [string]$url = $this.Proxy.Remote();
     if ($url.EndsWith('/')) {
       $url = $url.Substring(0, $($url.Length - 1));
     }
@@ -239,9 +243,79 @@ class Git : SourceControl {
   }
 
   [string] ReadRootPath() {
-    return $(git rev-parse --show-toplevel);
+    return $this.Proxy.Root();
   }
 } # Git
+
+function readHeadDate {
+  [OutputType([string])]
+  param()
+  return $(git log -n 1 --format=%ai) ?? [string]::Empty;
+}
+
+function readLogTags {
+  [OutputType([array])]
+  param()
+  return $((git log --tags --simplify-by-decoration --pretty="format:%ci %d") -match 'tag:') ?? @();
+}
+
+function readLogRange {
+  [OutputType([array])]
+  param(
+    [Parameter()]
+    [string]$range,
+
+    [Parameter()]
+    [string]$format
+  )
+  return $((git log $range --format=$format) ?? @());
+}
+
+function readRemote {
+  [OutputType([string])]
+  param()
+  return $((git remote get-url origin) -replace '\.git$') ?? [string]::Empty;
+}
+
+function readRoot {
+  [OutputType([string])]
+  param()
+  return $(git rev-parse --show-toplevel) ?? [string]::Empty;
+}
+
+# === [ ProxyGit ] ===========================================================
+#
+class ProxyGit {
+  ProxyGit() {}
+
+  # All these are designed to be overridden by tests
+  #
+  [scriptblock]$ReadHeadDate = $function:readHeadDate;
+  [scriptblock]$ReadLogTags = $function:readLogTags;
+  [scriptblock]$ReadLogRange = $function:readLogRange;
+  [scriptblock]$ReadRemote = $function:readRemote;
+  [scriptblock]$ReadRoot = $function:readRoot;
+
+  [string] HeadDate() {
+    return $this.ReadHeadDate.InvokeReturnAsIs();
+  }
+
+  [array] LogTags() {
+    return $this.ReadLogTags.InvokeReturnAsIs();
+  }
+
+  [array] LogRange([string]$range, [string]$format) {
+    return $this.ReadLogRange.InvokeReturnAsIs($range, $format);
+  }
+
+  [string] Remote() {
+    return $this.ReadRemote.InvokeReturnAsIs();
+  }
+
+  [string] Root() {
+    return $this.ReadRoot.InvokeReturnAsIs();
+  }
+}
 
 # === [ PoShLog ] ============================================================
 #
@@ -1980,28 +2054,15 @@ class GeneratorUtils {
 class PoShLogOptionsManager {
   [PSCustomObject]$OptionsInfo;
   [boolean]$Found;
+  [ProxyGit]$Proxy;
 
-  hidden [PSCustomObject]$_proxyGit;
+  PoShLogOptionsManager([ProxyGit]$proxy, [PSCustomObject]$optionsInfo) {
 
-  PoShLogOptionsManager([PSCustomObject]$optionsInfo) {
-    $this.OptionsInfo = $optionsInfo;
-  }
-
-  # $optionsInfo Must contain:
-  # - Base
-  # - DirectoryName
-  # - GroupBy
-  #
-  PoShLogOptionsManager([PSCustomObject]$proxyGit, [PSCustomObject]$optionsInfo) {
-
-    $this._proxyGit = $proxyGit;
+    $this.Proxy = $proxy;
     $this.OptionsInfo = $optionsInfo;
   }
 
   [void] Init() {
-    $this._proxyGit = [PSCustomObject]@{} | Add-Member `
-      -MemberType ScriptMethod -Name 'ReadRootPath' -Value $($this._sbReadRootPath) -PassThru;
-
     [void]$this.IsValidGroupBy($this.OptionsInfo.GroupBy);
   }
 
@@ -2013,18 +2074,17 @@ class PoShLogOptionsManager {
 
     return $(git rev-parse --show-toplevel);
   }
+
   [string] ReadRootPath() {
     [string]$root = if (($this.OptionsInfo)?.Root -and `
         -not([string]::IsNullOrEmpty($this.OptionsInfo.Root))) {
       $this.OptionsInfo.Root
     }
     else {
-      $this._proxyGit.ReadRootPath()
+      $this.Proxy.Root();
     }
     return $root;
   }
-
-
 
   [string] FileName([string]$name, [boolean]$ifEmoji) {
     return $ifEmoji ? $($name + '-emoji' + $this.OptionsInfo.Base) : $($name + $this.OptionsInfo.Base);

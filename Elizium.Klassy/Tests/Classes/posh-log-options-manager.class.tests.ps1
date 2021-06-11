@@ -2,7 +2,7 @@ using module "..\..\Output\Elizium.Klassy\Elizium.Klassy.psm1"
 
 Set-StrictMode -Version 1.0
 
-Describe 'PoShLogOptionsManager' -Tag 'ch-log' {
+Describe 'PoShLogOptionsManager' -Tag 'plog', 'om' {
   BeforeAll {
     Get-Module Elizium.Klassy | Remove-Module
     Import-Module .\Output\Elizium.Klassy\Elizium.Klassy.psm1 `
@@ -22,9 +22,6 @@ Describe 'PoShLogOptionsManager' -Tag 'ch-log' {
 
         return Join-path -Path $TestDrive -ChildPath $ROOT;
       }
-
-      [PSCustomObject]$proxyGit = [PSCustomObject]@{}
-      $proxyGit | Add-Member -MemberType ScriptMethod -Name 'ReadRootPath' -Value $ReadRootPath;
       
       [PSCustomObject]$optionsInfo = [PSCustomObject]@{
         Base          = '-changelog.options';
@@ -33,9 +30,7 @@ Describe 'PoShLogOptionsManager' -Tag 'ch-log' {
         Root          = $ReadRootPath.InvokeReturnAsIs();
       }
 
-      [PoShLogOptionsManager]$script:_manager = [PoShLogOptionsManager]::New(
-        $proxyGit, $optionsInfo
-      );
+      [PoShLogOptionsManager]$script:_manager = New-PoShLogOptionsManager -OptionsInfo $optionsInfo;
     }
   }
 
