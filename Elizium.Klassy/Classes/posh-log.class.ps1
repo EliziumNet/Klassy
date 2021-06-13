@@ -1525,7 +1525,7 @@ class PoShLogProfile {
   static [string]$OPTIONS_SCHEMA_FILENAME = 'posh-log.options.schema.json';
   static [string]$SCHEMA_VERSION = '1.0.0';
 
-  static [string]$DIRECTORY = '.loopz';
+  static [string]$DIRECTORY = '.posh-log';
 } # PoShLogProfile
 
 # === [ GeneratorUtils ] =======================================================
