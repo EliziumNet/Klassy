@@ -20,7 +20,8 @@ function New-PoShLog {
   param(
     [PSCustomObject]$Options
   )
-  [SourceControl]$git = [Git]::new($Options);
+  [ProxyGit]$proxy = [ProxyGit]::New();
+  [SourceControl]$git = [Git]::new($Options, $proxy);
   [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
   [MarkdownPoShLogGenerator]$generator = [MarkdownPoShLogGenerator]::new(
     $Options, $git, $grouper
