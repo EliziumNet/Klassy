@@ -414,7 +414,7 @@ Describe 'PoShLog' -Tag 'plog' {
         Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
       }
 
-      function script:New-TestChangeLog { # TODO, invoke Invoke Init on changeLog
+      function script:New-TestChangeLog {
         param(
           [Parameter()]
           [PSCustomObject]$Options,
