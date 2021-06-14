@@ -2066,15 +2066,6 @@ class PoShLogOptionsManager {
     [void]$this.IsValidGroupBy($this.OptionsInfo.GroupBy);
   }
 
-  # ReadRootPath
-  #
-  hidden [scriptblock] $_sbReadRootPath = [scriptblock] {
-    [OutputType([string])]
-    param()
-
-    return $(git rev-parse --show-toplevel);
-  }
-
   [string] ReadRootPath() {
     [string]$root = if (($this.OptionsInfo)?.Root -and `
         -not([string]::IsNullOrEmpty($this.OptionsInfo.Root))) {
