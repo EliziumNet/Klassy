@@ -414,7 +414,7 @@ Describe 'PoShLog' -Tag 'plog' {
         Date       = [DateTime]::Parse('2021-04-19 18:20:49 +0100');
       }
 
-      function script:New-TestChangeLog {
+      function script:New-TestChangeLog { # TODO, invoke Invoke Init on changeLog
         param(
           [Parameter()]
           [PSCustomObject]$Options,
@@ -611,7 +611,7 @@ Describe 'PoShLog' -Tag 'plog' {
           }
         }
 
-        It 'should: return tags in range' -Tag 'Current' {
+        It 'should: return tags in range' {
           InModuleScope Elizium.Klassy {
             $_changeLog.Options.Selection.Tags = [PSCustomObject]@{
               From  = '1.1.1';
@@ -995,6 +995,23 @@ Describe 'PoShLog' -Tag 'plog' {
         } # given: full history (no tags defined)
       } # given: OrderBy descending
     } # given: SquashBy NOT enabled
+
+    Context 'given: repo contains no Tags' {
+      It 'should: handle gracefully' {
+        InModuleScope Elizium.Klassy {
+          [hashtable]$overrides = [hashtable]::new($_overrides);
+
+          $overrides['ReadLogTags'] = [scriptblock] {
+            return @();
+          }
+
+          [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $overrides;
+          $changeLog.Init();
+          [hashtable]$releases = $changeLog.processCommits();
+          $releases | Should -Not -BeNullOrEmpty;
+        }
+      }
+    }
   } # processCommits
 
   Context 'composePartitions' {
@@ -1442,7 +1459,7 @@ Describe 'PoShLog' -Tag 'plog' {
 
       Context 'given: commit' {
         Context 'and: Statement <statement>' {
-          It 'should: fully resolve to be "<expected>"' -Tag 'Current' -TestCases @(
+          It 'should: fully resolve to be "<expected>"' -TestCases @(
             @{
               Statement = 'AUTHOR:*{authorStmt}';
               Expected  = $(
@@ -1596,7 +1613,7 @@ Describe 'PoShLog' -Tag 'plog' {
 
       Context 'given: config error' {
         Context 'and: Statement <statement>' {
-          It 'should: should throw "<because>"' -Tag 'Current' -TestCases @(
+          It 'should: should throw "<because>"' -TestCases @(
             @{
               Statement = '*{blooperStmt}';
               Because   = "'blooperStmt' is not a defined statement";
