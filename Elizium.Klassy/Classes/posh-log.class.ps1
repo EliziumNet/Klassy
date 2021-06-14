@@ -543,20 +543,20 @@ class PoShLog {
   # ASSUMPTION: descending
   #
   [PSCustomObject] getRange ([PSCustomObject]$current, [PSCustomObject[]]$allTags) {
-    [System.Predicate[PSCustomObject]]$predicate = [System.Predicate[PSCustomObject]] {
+    [System.Predicate[PSCustomObject]]$isCurrent = [System.Predicate[PSCustomObject]] {
       param(
         [PSCustomObject]$item
       )
       $item.Label -eq $current.Label;
     }
-    [int]$index = [Array]::FindIndex($allTags, $predicate);
-    [boolean]$isOldest = $index -eq ($allTags.Count - 1);
+    [int]$indexOfCurrent = [Array]::FindIndex($allTags, $isCurrent);
+    [boolean]$isOldest = $indexOfCurrent -eq ($allTags.Count - 1);
     
     [PSCustomObject]$result = if ($current.Label -eq 'HEAD') {
-      [string]$latest = $allTags[1].Label;
+      [string]$latest = ($allTags.Count -gt 1) ? $allTags[1].Label : 'HEAD';
 
       [PSCustomObject]@{
-        Range = "$($latest)..HEAD";
+        Range = ($latest -eq 'HEAD') ? 'HEAD' : "$($latest)..HEAD";
         From  = $latest;
         Until = 'HEAD';
       }
@@ -569,7 +569,7 @@ class PoShLog {
       }
     }
     else {
-      [string]$from = $allTags[$index + 1].Label;
+      [string]$from = $allTags[$indexOfCurrent + 1].Label;
 
       [PSCustomObject]@{
         Range = "$($from)..$($current.Label)";
