@@ -105,6 +105,10 @@ Describe 'PoShLog' -Tag 'plog' {
         $("2020-08-17 13:59:08 +01:00$($delim)3884bbec11f622f0c5ea8474049a891c02e0eb09$($delim)plastikfan$($delim)(feat #20): Rm ITEM-VALUE/PROPERTIES; use Pairs instead; Partial check"),
         $("2020-08-18 15:14:21 +01:00$($delim)11120d3c4ec110123417fcb36423403486d02275$($delim)plastikfan$($delim)Bump version to 1.0.1")
       );
+
+      [scriptblock]$script:_noTagsInRepo = [scriptblock] { # ReadLogTags
+        return @();
+      }
     }
   }
 
@@ -448,7 +452,7 @@ Describe 'PoShLog' -Tag 'plog' {
         [PSCustomObject]$dependencies = [PSCustomObject]@{
           PSTypeName    = 'Klassy.PoShLog.Test.Dependencies'
           #
-          SourceControl = git;
+          SourceControl = $git;
           Grouper       = $grouper;
           Generator     = $generator;
         }
@@ -1000,10 +1004,7 @@ Describe 'PoShLog' -Tag 'plog' {
       It 'should: handle gracefully' {
         InModuleScope Elizium.Klassy {
           [hashtable]$overrides = [hashtable]::new($_overrides);
-
-          $overrides['ReadLogTags'] = [scriptblock] {
-            return @();
-          }
+          $overrides['ReadLogTags'] = $_noTagsInRepo;
 
           [PoShLog]$changeLog, $null = New-TestChangeLog -Options $_options -Overrides $overrides;
           $changeLog.Init();
@@ -1359,6 +1360,25 @@ Describe 'PoShLog' -Tag 'plog' {
             }
           } # and: no GroupBy
         } # given: full history (no tags defined)
+
+        Context 'given: repo contains no Tags' {
+          It 'should: handle gracefully' {
+            InModuleScope Elizium.Klassy {
+              [hashtable]$overrides = [hashtable]::new($_overrides);
+              $overrides['ReadLogTags'] = $_noTagsInRepo;
+
+              [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $overrides;
+              $changeLog.Init();
+
+              [array]$releases = $changeLog.composePartitions();
+              [object]$template = $_options.Output.Template;
+              [string]$content = $dependencies.Generator.Generate(
+                $releases, $template, $changeLog.TagsInRangeWithHead
+              );
+              $content | Should -Not -BeNullOrEmpty;
+            }
+          }
+        }        
       } # MarkdownPoShLogGenerator.Generate
 
       Context 'given: MarkdownPoShLogGenerator.CreateComparisonLinks' {
@@ -1384,6 +1404,21 @@ Describe 'PoShLog' -Tag 'plog' {
             [string]$content = $dependencies.Generator.CreateDisabledWarnings();
             $content | Should -Not -BeNullOrEmpty;
           }
+        }
+      }
+    }
+
+    Context 'given: repo contains no Tags' {
+      It 'should: handle gracefully' {
+        InModuleScope Elizium.Klassy {
+          [hashtable]$overrides = [hashtable]::new($_overrides);
+          $overrides['ReadLogTags'] = $_noTagsInRepo;
+
+          [PoShLog]$changeLog, [PSCustomObject]$dependencies = New-TestChangeLog -Options $_options -Overrides $overrides;
+          $changeLog.Init();
+
+          [array]$releases = $changeLog.composePartitions();
+          $releases.Count -eq 0;
         }
       }
     }
@@ -1413,7 +1448,6 @@ Describe 'PoShLog' -Tag 'plog' {
     Context 'Evaluate' {
       BeforeEach {
         InModuleScope Elizium.Klassy {
-          [string]$script:_avatarLink = "<img title='plastikfan' src='https://github.com/plastikfan.png?size=24'>";
           [string]$script:_subject = 'feat(pstools)!: #145 Allow command to be invoked ...';
           [hashtable]$selectors = @{
             'scope'  = 'pstools';
