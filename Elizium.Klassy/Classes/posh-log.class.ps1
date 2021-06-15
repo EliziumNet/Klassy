@@ -55,7 +55,7 @@ class SourceControl {
     [PSCustomObject[]]$unsorted = $this.ReadGitTags($includeHead);
     [PSCustomObject[]]$sorted = $unsorted | Sort-Object -Property 'Date' -Descending:$descending;
 
-    return $sorted;
+    return $sorted ?? @();
   }
 
   [PSCustomObject[]] ReadGitCommitsInRange(
