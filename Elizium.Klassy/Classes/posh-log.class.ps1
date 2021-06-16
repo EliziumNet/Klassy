@@ -2353,7 +2353,7 @@ class PoShLogOptionsManager {
             PSTypeName       = 'Klassy.PoShLog.Options.Output.Sections.Release';
             #
             Highlights       = '*{highlightsStmt}';
-            HighlightContent = @('*{highlightDummy}');
+            HighlightContent = @('', '*{highlightDummy}');
           }
         }
 
