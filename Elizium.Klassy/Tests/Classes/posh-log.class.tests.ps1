@@ -291,7 +291,7 @@ Describe 'PoShLog' -Tag 'plog' {
           Sections   = [PSCustomObject]@{
             Release = [PSCustomObject]@{
               Highlights       = "*{highlightsStmt}";
-              HighlightContent = @('*{highlightDummyStmt}');
+              HighlightContent = @('', '*{highlightDummyStmt}');
             }
           }
 

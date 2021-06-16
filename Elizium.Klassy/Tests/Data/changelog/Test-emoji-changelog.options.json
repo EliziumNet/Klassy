@@ -42,7 +42,7 @@
     "Sections": {
       "Release": {
         "Highlights": "*{highlightsStmt}",
-        "HighlightContent": ["*{highlightDummyStmt}"]
+        "HighlightContent": ["", "*{highlightDummyStmt}"]
       }
     },
     "GroupBy": "scope/type/change/break",
