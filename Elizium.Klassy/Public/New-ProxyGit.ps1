@@ -1,7 +1,7 @@
 
 <#
   .NAME
-    New-GitProxy
+    New-ProxyGit
 
   .SYNOPSIS
     Create a new GitProxy instance
@@ -26,7 +26,7 @@
       return $_headTagData.TimeStamp;
     }
   }
-  [ProxyGit]$proxy = New-GitProxy -Overrides $overrides;
+  [ProxyGit]$proxy = New-ProxyGit -Overrides $overrides;
 
   .EXAMPLE
 
@@ -47,10 +47,10 @@
       )
       # do test stuff
     }
-    [ProxyGit]$proxy = New-GitProxy -Overrides $overrides;
+    [ProxyGit]$proxy = New-ProxyGit -Overrides $overrides;
   }
   #>
-function New-GitProxy {
+function New-ProxyGit {
   [OutputType([ProxyGit])]
   param(
     [Parameter()]
