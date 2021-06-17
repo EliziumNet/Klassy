@@ -426,7 +426,7 @@ Describe 'PoShLog' -Tag 'plog' {
           [Parameter()]
           [hashtable]$Overrides
         )
-        [ProxyGit]$proxy = New-GitProxy -Overrides $Overrides;
+        [ProxyGit]$proxy = New-ProxyGit -Overrides $Overrides;
 
         [Git]$git = [Git]::new($Options, $proxy);
         [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
