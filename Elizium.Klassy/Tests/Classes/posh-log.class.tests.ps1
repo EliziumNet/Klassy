@@ -426,21 +426,7 @@ Describe 'PoShLog' -Tag 'plog' {
           [Parameter()]
           [hashtable]$Overrides
         )
-        [ProxyGit]$proxy = [ProxyGit]::new();
-        [array]$members = ($proxy | Get-Member -MemberType Property).Name;
-
-        $Overrides.PSBase.Keys | ForEach-Object {
-          [string]$name = $_;
-
-          if ($members -contains $name) {
-            $proxy.$name = $Overrides[$name];
-          }
-          else {
-            throw [System.Management.Automation.MethodInvocationException]::new(
-              "'$name' does not exist on Proxy"
-            );
-          }
-        }
+        [ProxyGit]$proxy = New-GitProxy -Overrides $Overrides;
 
         [Git]$git = [Git]::new($Options, $proxy);
         [GroupByImpl]$grouper = [GroupByImpl]::new($Options);
