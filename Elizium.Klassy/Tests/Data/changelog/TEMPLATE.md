@@ -8,4 +8,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [[content]]
 [[links]]
 [[schema-version]]
-Powered By [:nazar_amulet: Elizium.Loopz](https://github.com/EliziumNet/Loopz)
+Powered By [:scroll: Elizium.PoShLog](https://github.com/EliziumNet/PoShLog)
