@@ -9,6 +9,9 @@ function New-ShellOperant {
     [string]$Directory,
 
     [Parameter()]
+    [string]$DateTimeFormat = 'yyyy-MM-dd_HH-mm-ss',
+
+    [Parameter()]
     [ValidateSet('UndoRename')]
     [string]$Operant = 'UndoRename',
 
@@ -16,7 +19,7 @@ function New-ShellOperant {
     [ValidateSet('PoShShell')]
     [string]$Shell = 'PoShShell'
   )
-  [string]$filename = "{0}_{1}.ps1" -f $BaseFilename, $(get-CurrentTime);
+  [string]$filename = "{0}_{1}.ps1" -f $BaseFilename, $(get-CurrentTime -Format $DateTimeFormat);
   [string]$fullPath = Join-Path -Path $Directory -ChildPath $filename;
 
   [Shell]$shell = if ($Shell -eq 'PoShShell') {
